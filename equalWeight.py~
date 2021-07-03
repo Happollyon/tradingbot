@@ -27,7 +27,7 @@ for i in range(0,len(symbol_groups)):
 my_columns = ['Ticker', 'Stock Price','Market Cap', 'Number of shares to buy']
 final_dataframe = pd.DataFrame(columns = my_columns)
 
-for symbol_string in symbol_strings[:1]:
+for symbol_string in symbol_strings:
     batch_api_url = f'https://sandbox.iexapis.com/stable/stock/market/batch?symbols={symbol_string},fb&types=quote&token={IEX_TOKEN}'
     #api_url = f'https://sandbox.iexapis.com/stable/stock/{stock}/quote/?token={IEX_TOKEN}'  
     data = r.get(batch_api_url).json()
@@ -45,7 +45,18 @@ for symbol_string in symbol_strings[:1]:
             
         
         )
-print(final_dataframe)
+# calculating the number of shares to buy
+portifolio_size = input("enter the size of your portifolio: ")
+try:
+    val = float(portifolio_size)
+    print(val)
+except:
+    print("please enter a proprer value")
+    portifolio_size = input("enter the size of your portifolio: ")
+    val = float(portifolio_size)
+position_size = val/ len(final_dataframe.index)
 
-   
+# calculate how many shares of the stock to buy
+for i in range(0, len(final_dataframe.index)):
+    print(final_dataframe.loc[i, 'Number of shares to buy'])
 

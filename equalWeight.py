@@ -1,3 +1,9 @@
+"""
+    This strategy spread all you funds among the available symbles. 
+    This implementation of this stratagy is only for educational purpose, as it is likely to result in losse of money. 
+
+"""
+
 
 #numpy runs in c++ which is really fast. 
 import numpy as np
@@ -45,7 +51,18 @@ for symbol_string in symbol_strings:
             
         
         )
-print(final_dataframe)
+# calculating the number of shares to buy
+portifolio_size = input("enter the size of your portifolio: ")
+try:
+    val = float(portifolio_size)
+    print(val)
+except:
+    print("please enter a proprer value")
+    portifolio_size = input("enter the size of your portifolio: ")
+    val = float(portifolio_size)
+position_size = val/ len(final_dataframe.index)
 
-   
+# calculate how many shares of the stock to buy
+for i in range(0, len(final_dataframe.index)):
+    print(final_dataframe.loc[i, 'Number of shares to buy'])
 
