@@ -105,4 +105,5 @@ writer.sheets['recomended_trades'].set_column('A:A',18,string_format)
 writer.sheets['recomended_trades'].set_column('B:B',18,string_format)
 writer.sheets['recomended_trades'].set_column('C:C',18,string_format)
 writer.sheets['recomended_trades'].set_column('D:D',18,string_format)
+
 writer.save()
