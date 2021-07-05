@@ -1,7 +1,9 @@
 """
+    Fagner Nunes 05/07/2021
+
     This strategy spread all you funds among the available symbles. 
     This implementation of this stratagy is only for educational purpose, as it is likely to result in losse of money. 
-
+    this bot doesnt place any order, as each broker has its own api and etc, but it will save the order in a excel file simulating a trading.
 """
 
 
@@ -14,7 +16,7 @@ import math
 
 stocks = pd.read_csv('sp_500_stocks.csv')
 from secret import IEX_TOKEN
-
+import xlsxwriter
 # This functions splits the list into chuncks of 100
 def chunks(lst, n) :
         for i in range(0, len(lst),n):
@@ -64,5 +66,44 @@ position_size = val/ len(final_dataframe.index)
 
 # calculate how many shares of the stock to buy
 for i in range(0, len(final_dataframe.index)):
-    print(final_dataframe.loc[i, 'Number of shares to buy'])
+    # some brokers dont sell fractional shares, you can use math.floor to round down to nearst int
+    final_dataframe.loc[i, 'Number of shares to buy'] = position_size/final_dataframe.loc[i,'Stock Price']
 
+print(final_dataframe)
+
+# now we save the order in a excel file. If you want you can modify this code to place the order in your behalf, to do that you need to read through your brokers api. 
+
+# initilizing the excel writer -> in this case we are using pandas bcz pandas already uses tabulated data format
+writer =pd.ExcelWriter('recomended_trades.xlsx', engine ='xlsxwriter' )
+final_dataframe.to_excel(writer,'recomended_trades', index = False)
+
+# creating xls format
+background_color = '#0a0a23'
+font_color = 'ffffff'
+
+string_format = writer.book.add_format({
+    'font_color': font_color,
+    'bg_color': background_color,
+    'border':1
+    
+    })
+dollar_format = writer.book.add_format({
+        'font_color': font_color,
+        'bg_color': background_color,
+        'border':1,
+        'num_format': '$0.00'
+
+                    })
+integer_format = writer.book.add_format({
+        'font_color': font_color,
+        'bg_color': background_color,
+        'border':1,
+        'num_format': 0
+
+                    })
+writer.sheets['recomended_trades'].set_column('A:A',18,string_format)
+writer.sheets['recomended_trades'].set_column('B:B',18,string_format)
+writer.sheets['recomended_trades'].set_column('C:C',18,string_format)
+writer.sheets['recomended_trades'].set_column('D:D',18,string_format)
+
+writer.save()
