@@ -50,6 +50,22 @@ for symbol_string in symbol_strings[:3]:
     
                 )
 # inplace = true midifies the data inside the dataframe so it stays sorted       
-final_dataframe.sort_values('One year return',ascending = False, inplace = True)   
+final_dataframe.sort_values('One year return',ascending = False, inplace = True)
+final_dataframe = final_dataframe[:10]
+final_dataframe.reset_index(inplace = True)
 
-print(final_dataframe[:10])
+
+#calculating the number of shares to buy
+def portfolio_input():
+    global portfolio_size
+    portfolio_size = input('enter portfolio size: ')
+    try:
+        float(portfolio_size)
+    except ValueError:
+        print('enter a  number')
+portfolio_input()
+
+position_size = float(portfolio_size) / 10
+
+for i in range(0, len(final_dataframe)):
+    final_dataframe.loc[i,'Number of shares to buy'] = 0
