@@ -49,5 +49,23 @@ for string in symbol_string:
                     ignore_index = True
                 )
 
-print(final_dataframe)
-    
+# sorting the 10 best stocks
+
+final_dataframe.sort_values('Price-to-earnings Ratio', inplace = True)
+# selects only the stocks with ratio greater than 0
+final_dataframe = final_dataframe[final_dataframe['Price-to-earnings Ratio'] > 0]
+#saves 10 top ratio
+final_dataframe = final_dataframe[:10]
+final_dataframe.reset_index(inplace = True)
+final_dataframe.drop('index', axis=1,inplace =True)
+# calculating the number of shares to buy
+def portfolio_input():
+    global portfolio
+    portfolio = float(input('enter the size of your portfolio: '))
+
+portfolio_input()
+position_size = portfolio/10
+
+for i in final_dataframe.index:
+    final_dataframe.loc[i,'Number of shares to buy'] =  final_dataframe.loc[i,'Price'] / position_size
+print(final_dataframe)    
