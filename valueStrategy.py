@@ -28,32 +28,80 @@ for i in range(0, len(symbol_groups)):
     symbol_string.append(','.join(symbol_groups[i]))
   
 
-my_columns = ['Ticker','Price','Price-to-earnings Ratio', 'Number of shares to buy']
+my_columns = [
+        'Ticker',
+        'Price',
+        'Number of shares to buy',
+        'Price-to-Earnings Ratio',
+        'PE %',
+        'Price-to-Book Ratio',
+        'PB %',
+        'Price-to-Sales Ratio',
+        'PS %',
+        'EV/EBITDA',
+        'EV/EBITDA %',
+        'EV/GP',
+        'EV/GP %',
+        'RV Score'
+         ]
 final_dataframe = pd.DataFrame(columns = my_columns)
 
 for string in symbol_string:
-    url = f'https://sandbox.iexapis.com/stable/stock/market/batch/?types=quote&symbols={string}&token={IEX_TOKEN}'
+    url = f'https://sandbox.iexapis.com/stable/stock/market/batch/?types=advanced-stats,quote&symbols={string}&token={IEX_TOKEN}'
     data = r.get(url).json()
 
     for symbol in string.split(','):
+        enterprise_value = data[symbol]['advanced-stats']['enterpriseValue']
+        ebitda = data[symbol]['advanced-stats']['EBITDA']
+        gross_profit = data[symbol]['advanced-stats']['grossProfit']
+        
+        try:
+            ev_to_ebitda = enterprise_value/ebitda
+        except TypeError:
+            ev_to_ebitda = np.NaN
+        
+        try:
+            ev_to_gross_profit = enterprise_value/gross_profit
+
+        except TypeError:
+            ev_to_gross_profit = np.NaN
+            
         final_dataframe = final_dataframe.append(
                     pd.Series([
                         symbol,
                         data[symbol]['quote']['latestPrice'],
+                        'N/A',
                         data[symbol]['quote']['peRatio'],
-                        'N/A'
+                        'N/A',
+                        data[symbol]['advanced-stats']['priceToBook'],
+                        'N/A',
+                        data[symbol]['advanced-stats']['priceToSales'],
+                        'N/A',
+                        ev_to_ebitda,
+                        'NA',
+                        ev_to_gross_profit,
+                        'na',
+                        'na'
 
                         ],
                             index = my_columns
                         ),
                     ignore_index = True
                 )
+# dealing with missing data in the dataframe. we are going to replace the NA with the average for that column 
+
+for column in ['Price-to-Earnings Ratio', 'Price-to-Book Ratio','Price-to-Sales Ratio',  'EV/EBITDA','EV/GP']:
+    final_dataframe[column].fillna(final_dataframe[column].mean(), inplace = True)
+
+
+
+
 
 # sorting the 10 best stocks
 
-final_dataframe.sort_values('Price-to-earnings Ratio', inplace = True)
+final_dataframe.sort_values('Price-to-Earnings Ratio', inplace = True)
 # selects only the stocks with ratio greater than 0
-final_dataframe = final_dataframe[final_dataframe['Price-to-earnings Ratio'] > 0]
+final_dataframe = final_dataframe[final_dataframe['Price-to-Earnings Ratio'] > 0]
 #saves 10 top ratio
 final_dataframe = final_dataframe[:10]
 final_dataframe.reset_index(inplace = True)
@@ -67,5 +115,23 @@ portfolio_input()
 position_size = portfolio/10
 
 for i in final_dataframe.index:
-    final_dataframe.loc[i,'Number of shares to buy'] =  final_dataframe.loc[i,'Price'] / position_size
-print(final_dataframe)    
+    final_dataframe.loc[i,'Number of shares to buy'] =  position_size / final_dataframe.loc[i,'Price']
+        
+
+
+# calculating the value %
+
+metrics = {
+
+'Price-to-Earnings Ratio': 'PE Percentile',
+'Price-to-Book Ratio':'PB Percentile',
+'Price-to-Sales Ratio': 'PS Percentile',
+'EV/EBITDA':'EV/EBITDA Percentile',
+'EV/GP':'EV/GP Percentile'
+}
+
+for row in values:
+    for 
+
+
+
