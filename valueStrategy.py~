@@ -7,6 +7,7 @@ import xlsxwriter
 from scipy import stats
 import math
 from secret import IEX_TOKEN
+from statistics import mean
 
 
 stocks = pd.read_csv('sp_500_stocks.csv')
@@ -95,17 +96,6 @@ for column in ['Price-to-Earnings Ratio', 'Price-to-Book Ratio','Price-to-Sales 
 
 
 
-
-
-# sorting the 10 best stocks
-
-final_dataframe.sort_values('Price-to-Earnings Ratio', inplace = True)
-# selects only the stocks with ratio greater than 0
-final_dataframe = final_dataframe[final_dataframe['Price-to-Earnings Ratio'] > 0]
-#saves 10 top ratio
-final_dataframe = final_dataframe[:10]
-final_dataframe.reset_index(inplace = True)
-final_dataframe.drop('index', axis=1,inplace =True)
 # calculating the number of shares to buy
 def portfolio_input():
     global portfolio
@@ -117,6 +107,44 @@ position_size = portfolio/10
 for i in final_dataframe.index:
     final_dataframe.loc[i,'Number of shares to buy'] =  position_size / final_dataframe.loc[i,'Price']
         
+
+
+# calculating the value %
+
+metrics = {
+
+'Price-to-Earnings Ratio': 'PE %',
+'Price-to-Book Ratio':'PB %',
+'Price-to-Sales Ratio': 'PS %',
+'EV/EBITDA':'EV/EBITDA %',
+'EV/GP':'EV/GP %'
+}
+
+for row in final_dataframe.index:
+    for metric in metrics.keys():
+        final_dataframe.loc[row,metrics[metric]] = stats.percentileofscore(final_dataframe[metric], final_dataframe.loc[row,metric])/100
+        
+for metric in metrics.values():
+    print(final_dataframe[metric])
+
+# Calculating the RV SCORE: The RV Score will be the arithmetic mean of the 4 percentile scores that we calculated in the last section.
+
+for row in final_dataframe.index:
+    value_percentiles = []
+    for metric in metrics.keys():
+        value_percentiles.append(final_dataframe.loc[row, metrics[metric]])
+    final_dataframe.loc[row,'RV Score'] = mean(value_percentiles)
+print(final_dataframe)    
+
+# sorting the 10 best stocks
+
+final_dataframe.sort_values('RV Score', inplace = True)
+# selects only the stocks with ratio greater than 0
+final_dataframe = final_dataframe[final_dataframe['Price-to-Earnings Ratio'] > 0]
+#saves 10 top ratio
+final_dataframe = final_dataframe[:10]
+final_dataframe.reset_index(inplace = True)
+final_dataframe.drop('index', axis=1,inplace =True)
 
 
 
