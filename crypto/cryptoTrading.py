@@ -35,7 +35,9 @@ my_columns = [
             "high",
             "low",
             "close",
-            "EMA",
+            "EMA9",
+            "EMA6",
+            "EMA3",
             "WMA"
 
         ]
@@ -56,7 +58,9 @@ for candle in data:
                 candle[3],
                 float(candle[4]),
                 'na',
-                'na'            
+                'na',
+                'na',
+                'na'
                 ],
                     index=my_columns
                 ),
@@ -88,14 +92,25 @@ graph['WMA'] = np.round(wma10, decimals = 3)
 A 10 day ema has a smoothingFactor/alfa = 2/(10+1) whichs is aprox 0.1818
 """
 ema9 = graph['close'].ewm(span=9).mean()
-graph['EMA'] = np.round(ema9, decimals = 3)
+ema6 = graph['close'].ewm(span=6).mean()
+ema3 = graph['close'].ewm(span=3).mean()
+#adding ema to dataframe
+graph['EMA9'] = np.round(ema9, decimals = 3)
+graph['EMA6'] = np.round(ema6, decimals = 3)
+graph['EMA3'] = np.round(ema3, decimals = 3)
+
+
+#ploting graph
 plt.plot(graph['close'],label = "Price")
-plt.plot(graph['EMA'], label= "ema9")
+plt.plot(graph['EMA9'], label= "ema9")
+plt.plot(graph['EMA6'], label= "ema6")
+plt.plot(graph['EMA3'], label= "ema3")
+
 
 plt.xlabel("time")
 plt.ylabel("price")
 plt.legend()
-#plots graph
-#graph.plot(y='EMA',x='open-time')
-#graph.plot(y="close",x='open-time')
+
+
+
 plt.show()
