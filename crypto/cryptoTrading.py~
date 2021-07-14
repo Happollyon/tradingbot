@@ -32,13 +32,16 @@ my_columns = [
 
             "open-time",
             "open",
-            "high",
+            "ihigh",
             "low",
             "close",
             "EMA9",
             "EMA6",
             "EMA3",
-            "WMA"
+            "WMA",
+            "BUY",
+            "SELL"
+            
 
         ]
 
@@ -47,7 +50,7 @@ graph =  pd.DataFrame(columns = my_columns)
 
 
  
-
+NaN = np.nan
 # populates dataframe
 for candle in data:
     graph = graph.append(
@@ -57,10 +60,12 @@ for candle in data:
                 candle[2],
                 candle[3],
                 float(candle[4]),
-                'na',
-                'na',
-                'na',
-                'na'
+                'N/A',
+                'N/A',
+                'N/A',
+                'N/A',
+                NaN,
+               NaN 
                 ],
                     index=my_columns
                 ),
@@ -96,21 +101,40 @@ ema6 = graph['close'].ewm(span=6).mean()
 ema3 = graph['close'].ewm(span=3).mean()
 #adding ema to dataframe
 graph['EMA9'] = np.round(ema9, decimals = 3)
-graph['EMA6'] = np.round(ema9, decimals = 3)
+graph['EMA6'] = np.round(ema6, decimals = 3)
 graph['EMA3'] = np.round(ema3, decimals = 3)
 
+position = False
+stop_loss = 0
+profit = 0
+for row in graph.index:
+    EMA3 = graph.loc[row,'EMA3']
+    EMA6 = graph.loc[row,'EMA6']
+    EMA9 = graph.loc[row,'EMA9']
+    price = graph.loc[row,'close']
+    if EMA3 > EMA6 and EMA3 > EMA9 and position==False:
+        stop_loss = price - (price*(0.6/100))
+        profit = price + (price*(0.86/100))        
+        graph.loc[row,"BUY"] = price
+        position = True
+        #print(f"buy {price}")
+    if EMA3 < EMA6 and EMA3 < EMA9 and position==True:
+        graph.loc[row,"SELL"] = price
+        position = False
+        #print(f"sell {price}")
 
 #ploting graph
-plt.plot(graph['close'],label = "Price")
-plt.plot(graph['EMA9'], label= "ema9")
-plt.plot(graph['EMA6'], label= "ema6")
-plt.plot(graph['EMA3'], label= "ema3")
-
+plt.plot(graph['close'],label = "Price",zorder=1)
+plt.plot(graph['EMA9'], label= "ema9",zorder=1)
+plt.plot(graph['EMA6'], label= "ema6", zorder=1)
+plt.plot(graph['EMA3'], label= "ema3",zorder=1)
+plt.scatter(graph['open-time'],graph['BUY'],label="buy")
+plt.scatter(graph['open-time'],graph['SELL'],label="sell")        
+    
 
 plt.xlabel("time")
 plt.ylabel("price")
 plt.legend()
-
 
 
 plt.show()
