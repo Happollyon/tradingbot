@@ -33,7 +33,7 @@ client = Spot(key=BINANCE_KEY,secret = BINANCE_SECRET_KEY)
 symbol = input("enter symbol: ")
 
 
-# fuctio to get market change in last 24h
+# fuction to get market change in last 24h
 def change24H():
     my_columns =  ["ticker","percentile",'volume']
     #url = 'https://api.binance.com/api/v1/ticker/24hr?'
