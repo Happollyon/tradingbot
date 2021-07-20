@@ -15,7 +15,12 @@ from binance.lib.utils import config_logging
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import datetime
+import queue
+import threading
 
+#import testnet keys
+testkey = config.TEST_KEY
+testSecret = config.TEST_SECRET_KEY
 
 # import keys
 BINANCE_KEY= config.BINANCE_KEY
@@ -25,13 +30,49 @@ BINANCE_SECRET_KEY = config.BINANCE_SECRET_KEY
 client = Spot(key=BINANCE_KEY,secret = BINANCE_SECRET_KEY)
 
 #getting symbol
-symbol =  input("enter symbol: ")
+symbol = input("enter symbol: ")
+
+
+# fuctio to get market change in last 24h
+def change24H():
+    my_columns =  ["ticker","percentile",'volume']
+    #url = 'https://api.binance.com/api/v1/ticker/24hr?'
+    url = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false&price_change_percentage=1h'
+    response =  r.get(url).json()
+    market = pd.DataFrame(columns = my_columns)
+
+    for data in response:
+        market = market.append(
+            pd.Series([
+                data["symbol"],
+                data["price_change_percentage_1h_in_currency"],
+                data["total_volume"]
+
+                ],
+                    index=my_columns
+                ),
+            ignore_index = True
+
+            )
+
+    market.sort_values("percentile",ascending= False,inplace= True)
+    symbol = market.iloc[0]
+    
+    return symbol['ticker']+"usdt"
+ 
+
+
+
 
 # gets data from binance
-data = r.get(f'https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit=1000').json()
+def get_pastData(symbol, startTime):
+    data = r.get(f'https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit=1000').json()
+    return data 
 
-#colum in dataframe
-my_columns = [
+
+def create_dataFrame(data_set, symbol):
+    #colum in dataframe
+    my_columns = [
 
             "open-time",
             "open",
@@ -49,16 +90,16 @@ my_columns = [
 
         ]
 
-# creates data frame
-graph =  pd.DataFrame(columns = my_columns)
+    # creates data frame
+    graph =  pd.DataFrame(columns = my_columns)
 
 
-# creates a NaN to avoid errors  
-NaN = np.nan
-# populates dataframe
-for candle in data:
+    # creates a NaN to avoid errors  
+    NaN = np.nan
+    # populates dataframe
+    for candle in data_set:
     
-    graph = graph.append(
+        graph = graph.append(
             pd.Series([
                 datetime.datetime.utcfromtimestamp(candle[0]/1000),
                 candle[1],
@@ -80,7 +121,7 @@ for candle in data:
             ignore_index = True
 
             )
-
+    return graph
 # this creates an array with integers 1 to 10 included    
 weights = np.arange(1,11)
 
@@ -97,42 +138,35 @@ lambda arguments : expression
 
 .dot product of two arrays.
 """
-wma10 = graph['close'].rolling(10).apply(lambda prices: np.dot(prices, weights)/weights.sum(),raw = True)
 
-graph['WMA'] = np.round(wma10, decimals = 3)
+def calcWMA(n):
+    wma10 = graph['close'].rolling(n).apply(lambda prices: np.dot(prices, weights)/weights.sum(),raw = True)
+
+    graph['WMA'] = np.round(wma10, decimals = 3)
 
 
 # calculating EMA
 """
 A 10 day ema has a smoothingFactor/alfa = 2/(10+1) whichs is aprox 0.1818
 """
-ema9 = graph['close'].ewm(span=9).mean()
-ema6 = graph['close'].ewm(span=6).mean()
-ema3 = graph['close'].ewm(span=3).mean()
 
-DATA = graph.copy()
-high_low = DATA['high'] - DATA['low']
-high_cp= np.abs(DATA['high'] - DATA['close'].shift())
-low_cp = np.abs(DATA['low'] - DATA['close'].shift())
-dp = pd.concat([high_low,high_cp,low_cp],axis=1)
-true_range = np.max(dp,axis=1)
-atr = true_range.rolling(14).mean()
+def calc_ema(dataset,n):
+    ema = dataset['close'].ewm(span=n).mean()
+    return ema
 
-  
-graph['ATR'] = atr
-#adding ema to dataframe
-graph['EMA9'] = np.round(ema9, decimals = 3)
-graph['EMA6'] = np.round(ema6, decimals = 3)
-graph['EMA3'] = np.round(ema3, decimals = 3)
+#ema9 = graph['close'].ewm(span=9).mean()
+#ema6 = graph['close'].ewm(span=6).mean()
+#ema3 = graph['close'].ewm(span=3).mean()
 
+def calculate_atr(DATA,n):
+    high_low = DATA['high'] - DATA['low']
+    high_cp= np.abs(DATA['high'] - DATA['close'].shift())
+    low_cp = np.abs(DATA['low'] - DATA['close'].shift())
+    dp = pd.concat([high_low,high_cp,low_cp],axis=1)
+    true_range = np.max(dp,axis=1)
+    atr = true_range.rolling(n).mean()
+    return atr
 
-# global variables 
-position = False    
-stop_loss = 0
-profit = 0
-portfolio = 100
-starting_portfolio = portfolio
-shares = 0
 
 # function that prints change in portfolio
 def getPortfolio(v1,v2):
@@ -140,37 +174,70 @@ def getPortfolio(v1,v2):
     print(f"profit: {percentile}%")
 
 """ ATR average of the last 14 candles (1.5 to 1)"""
+
 # algorithm to decide whent to buy and when to sell shares
-for row in graph.index[15:]:
+def buy_sell(graph,port):
+  
+    # global variables 
+    position = False    
+    stop_loss = 0
+    profit = 0
+    portfolio = port
+    starting_portfolio = portfolio
+    shares = 0
+
     
-    EMA3 = graph.loc[row,'EMA3']
-    EMA6 = graph.loc[row,'EMA6']
-    EMA9 = graph.loc[row,'EMA9']
-    price = graph.loc[row,'close']
-    time =  graph.loc[row, 'open-time']
+    
+    for row in graph.index[15:]:
         
-    if EMA3 > EMA6 and EMA3 > EMA9 and position==False:
         
-        stop_loss = price - (graph.loc[row,'ATR']*1.5)
-        profit = price + (graph.loc[row,'ATR']*3)  
-        shares  = portfolio/price
-        portfolio = 0
-        graph.loc[row,"BUY"] = price
-        position = True
-        #print(f"{stop_loss}------{profit}") 
-    if  price>=profit and position==True or price <= stop_loss and position==True:
-        graph.loc[row,"SELL"] = price
-        portfolio = shares*price
-        position = False
-        graph.loc[row,"portfolio"] = portfolio
-        print(portfolio)
-        getPortfolio(starting_portfolio,portfolio)               
+        EMA3 = graph.loc[row,'EMA3']
+        EMA6 = graph.loc[row,'EMA6']
+        EMA9 = graph.loc[row,'EMA9']
+        price = graph.loc[row,'close']
+        time =  graph.loc[row, 'open-time']
         
+        if EMA3 > EMA6 and EMA3 > EMA9 and position==False:
+        
+            stop_loss = price - (graph.loc[row,'ATR']*1.5)
+            profit = price + (graph.loc[row,'ATR']*3)  
+            shares  = portfolio/price
+            portfolio = 0
+            graph.loc[row,"BUY"] = price
+            position = True 
+        
+        if  price>=profit and position==True or price <= stop_loss and position==True:
+            graph.loc[row,"SELL"] = price
+            portfolio = shares*price
+            position = False
+            graph.loc[row,"portfolio"] = portfolio
+
+            
+            getPortfolio(starting_portfolio,portfolio)               
+        
+    return graph
 
 getPortfolio(starting_portfolio,portfolio)
 
 #with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
 #    print(graph[['open-time','ATR']])
+
+
+#testing functions
+pastDATA = get_pastData(symbol,1222)
+graph = create_dataFrame(pastDATA,symbol)
+ema9 = calc_ema(graph,9)
+ema6 = calc_ema(graph,6)
+ema3 = calc_ema(graph,3)
+
+atr = calculate_atr(graph,14) 
+graph['ATR'] = atr
+#adding ema to dataframe
+graph['EMA9'] = np.round(ema9, decimals = 3)
+graph['EMA6'] = np.round(ema6, decimals = 3)
+graph['EMA3'] = np.round(ema3, decimals = 3)
+
+graph = buy_sell(graph,100)
 
 #ploting graph
 plot1 =plt.figure(1)
