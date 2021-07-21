@@ -29,9 +29,6 @@ BINANCE_SECRET_KEY = config.BINANCE_SECRET_KEY
 #creates client obj
 client = Spot(key=BINANCE_KEY,secret = BINANCE_SECRET_KEY)
 
-#getting symbol
-symbol = input("enter symbol: ")
-
 
 # fuction to get market change in last 24h
 def change24H():
@@ -66,7 +63,7 @@ def change24H():
 
 # gets data from binance
 def get_pastData(symbol, startTime):
-    data = r.get(f'https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit=1000').json()
+    data = r.get(f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit=1000").json()
     return data 
 
 
@@ -213,51 +210,93 @@ def buy_sell(graph,port):
             graph.loc[row,"portfolio"] = portfolio
 
             
-            getPortfolio(starting_portfolio,portfolio)               
+            #getPortfolio(starting_portfolio,portfolio)               
         
     return graph
 
-getPortfolio(starting_portfolio,portfolio)
+#getPortfolio(starting_portfolio,portfolio)
 
 #with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
 #    print(graph[['open-time','ATR']])
 
+# function creating console
+def console(q):
+    
+    # infinit loop
+    while 1:
+        # get input
+        cmd = input("> ")
+        q.put(cmd)
 
-#testing functions
-pastDATA = get_pastData(symbol,1222)
-graph = create_dataFrame(pastDATA,symbol)
-ema9 = calc_ema(graph,9)
-ema6 = calc_ema(graph,6)
-ema3 = calc_ema(graph,3)
-
-atr = calculate_atr(graph,14) 
-graph['ATR'] = atr
-#adding ema to dataframe
-graph['EMA9'] = np.round(ema9, decimals = 3)
-graph['EMA6'] = np.round(ema6, decimals = 3)
-graph['EMA3'] = np.round(ema3, decimals = 3)
-
-graph = buy_sell(graph,100)
-
-#ploting graph
-plot1 =plt.figure(1)
-plt.plot(graph['open-time'],graph['close'],label = "Price",zorder=1)
-plt.plot(graph['open-time'],graph['EMA9'], label= "ema9",zorder=1)
-plt.plot(graph['open-time'],graph['EMA6'], label= "ema6", zorder=1)
-plt.plot(graph['open-time'],graph['EMA3'], label= "ema3",zorder=1)
-
-plot2= plt.figure(2)
-plt.plot(graph['open-time'],graph['close'],label = "Price",zorder=1)
-plt.scatter(graph['open-time'],graph['BUY'],label="buy")
-plt.scatter(graph['open-time'],graph['SELL'],label="sell")        
-
-plot3 = plt.figure(3)
-plt.plot(graph["open-time"], graph['portfolio'], marker = 'o',label = "Portfolio")
+        #leave infinit loop
+        if cmd == "quit":
+            break
+#actios
+def simulation():
+    #getting symbol
+    symbol = input("enter symbol: ")
 
 
+    #testing functions
+    pastDATA = get_pastData(symbol,1222)
+    graph = create_dataFrame(pastDATA,symbol)
+    ema9 = calc_ema(graph,9)
+    ema6 = calc_ema(graph,6)
+    ema3 = calc_ema(graph,3)
 
-plt.xlabel("time")
-plt.ylabel("price")
+    atr = calculate_atr(graph,14) 
+    graph['ATR'] = atr
+    #adding ema to dataframe
+    graph['EMA9'] = np.round(ema9, decimals = 3)
+    graph['EMA6'] = np.round(ema6, decimals = 3)
+    graph['EMA3'] = np.round(ema3, decimals = 3)
 
-plt.legend()
-plt.show()
+    graph = buy_sell(graph,100)
+
+    #ploting graph
+    plot1 =plt.figure(1)
+    plt.plot(graph['open-time'],graph['close'],label = "Price",zorder=1)
+    plt.plot(graph['open-time'],graph['EMA9'], label= "ema9",zorder=1)
+    plt.plot(graph['open-time'],graph['EMA6'], label= "ema6", zorder=1)
+    plt.plot(graph['open-time'],graph['EMA3'], label= "ema3",zorder=1)
+
+    plot2= plt.figure(2)
+    plt.plot(graph['open-time'],graph['close'],label = "Price",zorder=1)
+    plt.scatter(graph['open-time'],graph['BUY'],label="buy")
+    plt.scatter(graph['open-time'],graph['SELL'],label="sell")        
+
+    plot3 = plt.figure(3)
+    plt.plot(graph["open-time"], graph['portfolio'], marker = 'o',label = "Portfolio")
+
+
+
+    plt.xlabel("time")
+    plt.ylabel("price")
+
+    plt.legend()
+    plt.show()
+
+
+def foo():
+    print("TESTINGG")
+
+def invalid_input():
+    print("invalid command :( ")
+# main
+def main():
+    #actions connected to function
+    cmd_actions = {'foo':foo,'simulation':simulation}
+
+    cmd_queue =  queue.Queue()
+
+    dj = threading.Thread(target = console, args = {cmd_queue})
+    dj.start()
+
+    while 1:
+        cmd = cmd_queue.get()
+        if cmd == 'quit':
+            break
+        action = cmd_actions.get(cmd, invalid_input)
+        action()
+
+main()

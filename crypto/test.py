@@ -6,7 +6,7 @@ import queue
 def console(q):
    
     # infinit loop
-    while 1:i
+    while 1:
 
         # get input
         cmd = input("> ")
