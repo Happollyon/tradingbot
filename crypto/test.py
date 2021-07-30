@@ -46,4 +46,4 @@ def main():
             break
         action = cmd_actions.get(cmd, invalid_input)
         action()
-main()        
+#main()        

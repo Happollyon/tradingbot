@@ -1,9 +1,7 @@
-""" 
+"""
     Fagner Nunes 07/2021
     trading bot using binance API
 """
-
-
 import numpy as np
 import pandas as pd 
 import requests as r  
@@ -17,7 +15,16 @@ import matplotlib as mpl
 import datetime
 import queue
 import threading
-
+import time
+import logging
+import websocket
+import asyncio
+import json
+from binance.websocket.spot.websocket_client import SpotWebsocketClient as Client
+from matplotlib.animation import FuncAnimation
+import concurrent.futures
+import multiprocessing
+from multiprocessing import freeze_support
 #import testnet keys
 testkey = config.TEST_KEY
 testSecret = config.TEST_SECRET_KEY
@@ -27,7 +34,30 @@ BINANCE_KEY= config.BINANCE_KEY
 BINANCE_SECRET_KEY = config.BINANCE_SECRET_KEY
 
 #creates client obj
-client = Spot(key=BINANCE_KEY,secret = BINANCE_SECRET_KEY)
+#client = Spot(key=BINANCE_KEY,secret = BINANCE_SECRET_KEY)
+client = Spot('https://testnet.binance.vision')
+
+plt.style.use('fivethirtyeight')
+
+   #colum in dataframe
+my_columns = [
+
+            "open-time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "EMA9",
+            "EMA6",
+            "EMA3",
+            "WMA",
+            "BUY",
+            "SELL",
+            "ATR",
+            "portfolio"
+
+        ]
+
 
 
 # fuction to get market change in last 24h
@@ -62,31 +92,13 @@ def change24H():
 
 
 # gets data from binance
-def get_pastData(symbol, startTime):
-    data = r.get(f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit=1000").json()
+def get_pastData(symbol,interval):
+    data = r.get(f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=50").json()
     return data 
 
 
 def create_dataFrame(data_set, symbol):
-    #colum in dataframe
-    my_columns = [
-
-            "open-time",
-            "open",
-            "high",
-            "low",
-            "close",
-            "EMA9",
-            "EMA6",
-            "EMA3",
-            "WMA",
-            "BUY",
-            "SELL",
-            "ATR",
-            "portfolio"
-
-        ]
-
+ 
     # creates data frame
     graph =  pd.DataFrame(columns = my_columns)
 
@@ -98,7 +110,7 @@ def create_dataFrame(data_set, symbol):
     
         graph = graph.append(
             pd.Series([
-                datetime.datetime.utcfromtimestamp(candle[0]/1000),
+                datetime.datetime.utcfromtimestamp(float(candle[0])/1000),
                 candle[1],
                 float(candle[2]),
                 float(candle[3]),
@@ -235,10 +247,10 @@ def console(q):
 def simulation():
     #getting symbol
     symbol = input("enter symbol: ")
-
+    interval = input("enter symbol: ")
 
     #testing functions
-    pastDATA = get_pastData(symbol,1222)
+    pastDATA = get_pastData(symbol,interval)
     graph = create_dataFrame(pastDATA,symbol)
     ema9 = calc_ema(graph,9)
     ema6 = calc_ema(graph,6)
@@ -259,7 +271,7 @@ def simulation():
     plt.plot(graph['open-time'],graph['EMA9'], label= "ema9",zorder=1)
     plt.plot(graph['open-time'],graph['EMA6'], label= "ema6", zorder=1)
     plt.plot(graph['open-time'],graph['EMA3'], label= "ema3",zorder=1)
-
+    
     plot2= plt.figure(2)
     plt.plot(graph['open-time'],graph['close'],label = "Price",zorder=1)
     plt.scatter(graph['open-time'],graph['BUY'],label="buy")
@@ -277,16 +289,92 @@ def simulation():
     plt.show()
 
 
+def update_chart(message):
+    
+    print('update_chart() started')    
+    global df 
+    NaN = np.nan
+    df2 = pd.DataFrame(columns=my_columns)   
+    df2 = df2.append({
+        "open-time":datetime.datetime.utcfromtimestamp(message['k']['t']/1000),
+        "open":float( message['k']['o']),
+        "high":float( message['k']['h']),
+        "low":float( message['k']['l']),
+        "close":float(message['k']['c']),
+        "EMA9":NaN,
+        "EMA6":NaN,
+        "EMA3":NaN,
+        "WMA":NaN,
+        "BUY":NaN,
+        "SELL":NaN,
+        "ATR":NaN,
+        "portfolio":NaN},ignore_index = True)
+            
+    print(len(df2.index)) 
+    df = df.append(df2,ignore_index=True)
+    print(len(df.index))
+
+def on_message(wsapp,message):
+    print('on_message() started')
+    message2 = json.loads(message)
+    update_chart(message2)
+    
+def on_close():
+    print('FAGNER, CONNECTION HAS BEEN CLOSED!!!')
+           
+def getCandels(symbol,interval):
+    print('getCandels() started')
+    url = 'wss://stream.binance.com:9443/ws/btcusdt@kline_5m'
+    wsapp = websocket.WebSocketApp(url, on_message=on_message,on_close=on_close)
+    wsapp.run_forever()
+
+plt1 = plt.figure()
+def animate():
+    print('animate() started')
+    plt.cla()
+    global df
+    plt.plot(df['open-time'],df['close'],label = "Price")
+    plt.legend(loc='upper left')
+    plt.tight_layout()
+ 
+def ploting():
+
+    plot1 =plt.figure(1)
+    plt.plot(df['open-time'],df['close'],label = "Price") 
+    plt.show()
+    ani = FuncAnimation(plt.gcf(), animate, interval=1000)
+    
+def trading_test():
+    print('trading_test() started')
+    #symbol = input("enter symbol: ")
+    #interval = input("enter interval: ")
+    data_set = get_pastData("BTCUSDT","5m")
+    global df
+    global ani
+    df = create_dataFrame(data_set, "5m")
+    #plot1 =plt.figure(1)
+    #plt.plot(df['open-time'],df['close'],label = "Price")
+    #threading.Thread(target=getCandels("BTCUSDT","5m")).start()
+    #p2 = multiprocessing.Process(target=getCandels,args=['BTCUSDT','5m'])
+    # with concurrent.futures.ProcessPoolExecutor() as executor:
+       # f1 = executor.submit(getCandels,"BTCUSDT","5m")
+        
+    p1 = multiprocessing.Process(target = getCandels,args=["BTCUSDT","5m"])
+    p1.start()
+    #ani = FuncAnimation(plt.gcf(), animate, interval=1000)
+
+   
 def foo():
     print("TESTINGG")
 
 def invalid_input():
     print("invalid command :( ")
+
 # main
 def main():
     #actions connected to function
-    cmd_actions = {'foo':foo,'simulation':simulation}
-
+    cmd_actions = {'foo':foo,'simulation':simulation,"tradingTest":trading_test}
+    
     cmd_queue =  queue.Queue()
 
     dj = threading.Thread(target = console, args = {cmd_queue})
@@ -298,5 +386,10 @@ def main():
             break
         action = cmd_actions.get(cmd, invalid_input)
         action()
-
-main()
+#ani = FuncAnimation(plt.gcf(), animate, interval=1000)
+if __name__ == '__main__':
+    freeze_support()
+    print('main start')
+    trading_test()
+p2  = multiprocessing.Process(target = plt.show)
+#main()
