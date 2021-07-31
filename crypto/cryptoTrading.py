@@ -1,4 +1,5 @@
 """
+    df = create_dataFrame(data_)
     Fagner Nunes 07/2021
     trading bot using binance API
 """
@@ -23,8 +24,8 @@ import json
 from binance.websocket.spot.websocket_client import SpotWebsocketClient as Client
 from matplotlib.animation import FuncAnimation
 import concurrent.futures
-import multiprocessing
-from multiprocessing import freeze_support
+import multiprocessing as mp
+from multiprocessing import freeze_support,Manager
 #import testnet keys
 testkey = config.TEST_KEY
 testSecret = config.TEST_SECRET_KEY
@@ -59,7 +60,7 @@ my_columns = [
         ]
 
 
-
+NaN = np.nan
 # fuction to get market change in last 24h
 def change24H():
     my_columns =  ["ticker","percentile",'volume']
@@ -93,7 +94,7 @@ def change24H():
 
 # gets data from binance
 def get_pastData(symbol,interval):
-    data = r.get(f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=50").json()
+    data = r.get(f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=5").json()
     return data 
 
 
@@ -289,9 +290,9 @@ def simulation():
     plt.show()
 
 
-def update_chart(message):
-    
-    print('update_chart() started')    
+def update_chart(message,List):
+    List.append('Fagner')
+    print('update_chart() {List}')    
     global df 
     NaN = np.nan
     df2 = pd.DataFrame(columns=my_columns)   
@@ -314,55 +315,47 @@ def update_chart(message):
     df = df.append(df2,ignore_index=True)
     print(len(df.index))
 
-def on_message(wsapp,message):
-    print('on_message() started')
+def on_message(List,ws,message):
     message2 = json.loads(message)
-    update_chart(message2)
+    data = message2['k']
+    NaN = np.nan
+    
+    time = datetime.datetime.utcfromtimestamp(data['t']/1000)    
+    List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
+    
     
 def on_close():
     print('FAGNER, CONNECTION HAS BEEN CLOSED!!!')
            
-def getCandels(symbol,interval):
-    print('getCandels() started')
+def getCandels(symbol,interva,List):
+    
     url = 'wss://stream.binance.com:9443/ws/btcusdt@kline_5m'
-    wsapp = websocket.WebSocketApp(url, on_message=on_message,on_close=on_close)
-    wsapp.run_forever()
+    ws= websocket.WebSocketApp(url, on_message=on_message,on_close=on_close)
+    ws.on_message = lambda *x: on_message(List, *x)
+    ws.run_forever()
 
 plt1 = plt.figure()
-def animate():
-    print('animate() started')
+def animate(self,List, df):
+    print(f'animate() {List}')
+    data = list(List)
+    size = len(data)
+    if size > 0:
+        print(f'animate inide if')    
+        df.loc[len(df.index)+1]= data[size-1]
     plt.cla()
-    global df
     plt.plot(df['open-time'],df['close'],label = "Price")
     plt.legend(loc='upper left')
     plt.tight_layout()
  
-def ploting():
-
-    plot1 =plt.figure(1)
-    plt.plot(df['open-time'],df['close'],label = "Price") 
+def ploting(List,historical_data):
+    data_set= get_pastData("BTCUSDT","5m")
+    df = create_dataFrame(data_set,"5m")    
+    ani = FuncAnimation(plt.gcf(), animate,fargs=(List,df), interval=1000)
     plt.show()
-    ani = FuncAnimation(plt.gcf(), animate, interval=1000)
-    
-def trading_test():
+def trading_test(List,historical_data):
     print('trading_test() started')
-    #symbol = input("enter symbol: ")
-    #interval = input("enter interval: ")
-    data_set = get_pastData("BTCUSDT","5m")
-    global df
-    global ani
-    df = create_dataFrame(data_set, "5m")
-    #plot1 =plt.figure(1)
-    #plt.plot(df['open-time'],df['close'],label = "Price")
-    #threading.Thread(target=getCandels("BTCUSDT","5m")).start()
-    #p2 = multiprocessing.Process(target=getCandels,args=['BTCUSDT','5m'])
-    # with concurrent.futures.ProcessPoolExecutor() as executor:
-       # f1 = executor.submit(getCandels,"BTCUSDT","5m")
-        
-    p1 = multiprocessing.Process(target = getCandels,args=["BTCUSDT","5m"])
-    p1.start()
-    #ani = FuncAnimation(plt.gcf(), animate, interval=1000)
-
+    getCandels("BTCUSDT","5m",List)
+   
    
 def foo():
     print("TESTINGG")
@@ -386,10 +379,21 @@ def main():
             break
         action = cmd_actions.get(cmd, invalid_input)
         action()
-#ani = FuncAnimation(plt.gcf(), animate, interval=1000)
+
+
 if __name__ == '__main__':
+    manager = mp.Manager()
+    List = manager.list() #list to be shared between processes
+    historical_data =manager.list()
     freeze_support()
-    print('main start')
-    trading_test()
-p2  = multiprocessing.Process(target = plt.show)
-#main()
+    p1=mp.Process(target=trading_test, args=(List,historical_data))
+    p2=mp.Process(target=ploting, args=(List,historical_data))
+    p1.start()
+    p2.start()
+    p1.join()
+    p1.join()
+
+
+
+
+
