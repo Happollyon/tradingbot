@@ -3,6 +3,10 @@
     Fagner Nunes 07/2021
     trading bot using binance API
 """
+import sys
+import hmac
+from urllib.parse import urlencode, urljoin
+import hashlib
 import numpy as np
 import pandas as pd 
 import requests as r  
@@ -26,6 +30,12 @@ from matplotlib.animation import FuncAnimation
 import concurrent.futures
 import multiprocessing as mp
 from multiprocessing import freeze_support,Manager
+from binance.error import ClientError
+"""
+    GETTING Arguments 
+"""
+args = sys.argv
+
 #import testnet keys
 testkey = config.TEST_KEY
 testSecret = config.TEST_SECRET_KEY
@@ -34,10 +44,14 @@ testSecret = config.TEST_SECRET_KEY
 BINANCE_KEY= config.BINANCE_KEY
 BINANCE_SECRET_KEY = config.BINANCE_SECRET_KEY
 
+test_url = 'https://testnet.binance.vision'
 #creates client obj
 #client = Spot(key=BINANCE_KEY,secret = BINANCE_SECRET_KEY)
-client = Spot('https://testnet.binance.vision')
+client = Spot(testkey, testSecret,base_url=test_url)
 
+headers = {
+    'X-MBX-APIKEY': testkey
+}
 plt.style.use('fivethirtyeight')
 
    #colum in dataframe
@@ -56,9 +70,26 @@ my_columns = [
             "SELL",
             "ATR",
             "portfolio"
-
         ]
 
+def place_order(symbol,side,typee,quantity):
+    
+    params = {
+    
+    "symbol": symbol,
+    "side": side,
+    "type": typee,
+    "quantity": quantity,
+    
+    }
+    response = client.new_order(**params)
+    return response
+
+def cancel_all_open_orders(symbol):
+    orders = client.get_open_orders(symbol)
+    for order in orders:
+        response = client.cancel_order(symbol, orderId=order['orderId'])
+        print("order canceled")
 
 NaN = np.nan
 # fuction to get market change in last 24h
@@ -87,7 +118,7 @@ def change24H():
     symbol = market.iloc[0]
     
     return symbol['ticker']+"usdt"
- 
+
 
 
 
@@ -289,72 +320,116 @@ def simulation():
     plt.legend()
     plt.show()
 
-
-def update_chart(message,List):
-    List.append('Fagner')
-    print('update_chart() {List}')    
-    global df 
-    NaN = np.nan
-    df2 = pd.DataFrame(columns=my_columns)   
-    df2 = df2.append({
-        "open-time":datetime.datetime.utcfromtimestamp(message['k']['t']/1000),
-        "open":float( message['k']['o']),
-        "high":float( message['k']['h']),
-        "low":float( message['k']['l']),
-        "close":float(message['k']['c']),
-        "EMA9":NaN,
-        "EMA6":NaN,
-        "EMA3":NaN,
-        "WMA":NaN,
-        "BUY":NaN,
-        "SELL":NaN,
-        "ATR":NaN,
-        "portfolio":NaN},ignore_index = True)
-            
-    print(len(df2.index)) 
-    df = df.append(df2,ignore_index=True)
-    print(len(df.index))
-
-def on_message(List,ws,message):
-    message2 = json.loads(message)
-    data = message2['k']
-    NaN = np.nan
+#every time websocet recieves a msg this function is called
+# and List is updated so graph can update 
+def on_message(List,starting_data,ws,message):
     
-    time = datetime.datetime.utcfromtimestamp(data['t']/1000)    
-    List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
+    message2 = json.loads(message) 
+    sell_action = sell(float(message2['k']['o']),starting_data)
     
+    if sell_action:
+        data = message2['k']
+        NaN = np.nan
+        time = datetime.datetime.utcfromtimestamp(data['t']/1000)    
+        List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,data['o'],NaN,NaN])
+        
+    if message2['k']['x']==True:
+        data = message2['k']
+        NaN = np.nan
+        time = datetime.datetime.utcfromtimestamp(data['t']/1000)    
+        List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
+        
     
 def on_close():
     print('FAGNER, CONNECTION HAS BEEN CLOSED!!!')
            
-def getCandels(symbol,interva,List):
+#initializes websocket args: symbol and List (List shared between process )           
+def getCandels(symbol,interval,List,starting_data):
     
-    url = 'wss://stream.binance.com:9443/ws/btcusdt@kline_5m'
+    url = 'wss://stream.binance.com:9443/ws/btcusdt@kline_1m'
     ws= websocket.WebSocketApp(url, on_message=on_message,on_close=on_close)
-    ws.on_message = lambda *x: on_message(List, *x)
+    ws.on_message = lambda *x: on_message(List,starting_data, *x)
     ws.run_forever()
 
-plt1 = plt.figure()
-def animate(self,List, df):
-    print(f'animate() {List}')
+
+def buy(ema3,ema6,ema9,price,time,starting_data,atr):
+    print('here buy')
+    if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False:
+        starting_data['stop_loss'] = price - ( atr * 1.5 )
+        starting_data['profit'] = price + (atr * 3)
+        starting_data['shares'] = protfolio/price
+        starting_data['portfolio'] = 0
+        starting_data['position'] = True
+        response =place_order('BTCUSDT','BUY','MARKET',starting_data['shares'])   
+        if response['status'] != 'filed':
+            print('not filled')
+        return True
+    return False
+
+def sell(price, starting_data):
+    profit = starting_data['profit']
+    position = starting_data['position'] 
+    stop_loss = starting_data['stop_loss']
+    
+    if price >= profit and position==True or price <= stop_loss  and position == True:
+        print('heree')
+        portfolio = starting_data['shares']*price
+        starting_data['portfolio']=portfolio
+        starting_position['position'] = False
+        print('inside if inside sell')
+        return True
+    
+    return False         
+
+#Animate function is called by ploting function
+def animate(self,List, df,starting_data):
     data = list(List)
     size = len(data)
+    for i in range(5):
+        print(i)
+        time.sleep(2)
     if size > 0:
-        print(f'animate inide if')    
-        df.loc[len(df.index)+1]= data[size-1]
+        df_size = len(df.index)
+        df.loc[df_size+1]= data[size-1]
+        ema9 = calc_ema(df,9)
+        ema6 = calc_ema(df,6)
+        ema3 = calc_ema(df,3)
+        atr = calculate_atr(df,14)
+        df['ATR'] = atr
+        df['EMA9'] = ema9
+        df['EMA6'] = ema6
+        df['EMA3'] = ema6
+        buy_action=False
+        if starting_data['position']:
+            buy_action = buy(df.loc[df_size+1,'EMA3'],df.loc[df_size+1,'EMA6'],df.loc[df_size+1,'EMA9'],df.loc[df_size+1,'close'],df.loc[df_size+1,'open-time'],starting_data,df.loc[df_size+1,'ATR'])
+        
+        if buy_action:
+            df['BUY'] = df.loc[df_size + 1,'close']
     plt.cla()
     plt.plot(df['open-time'],df['close'],label = "Price")
     plt.legend(loc='upper left')
     plt.tight_layout()
- 
-def ploting(List,historical_data):
+
+
+#fucion that plots the graph with previous data and initializes animate function.
+#function meant to be used with Multporcessing.
+def ploting(List,starting_data):
     data_set= get_pastData("BTCUSDT","5m")
-    df = create_dataFrame(data_set,"5m")    
-    ani = FuncAnimation(plt.gcf(), animate,fargs=(List,df), interval=1000)
+    df = create_dataFrame(data_set,"5m") 
+    ema9 = calc_ema(df,9)
+    ema6 = calc_ema(df,6)
+    ema3 = calc_ema(df,3)
+    
+    df['EMA9'] = np.round(ema9, decimals = 3)
+    df['EMA6'] = np.round(ema6, decimals = 3)
+    df['EMA3'] = np.round(ema3, decimals = 3)    
+    atr = calculate_atr(df,14)
+    df['ATR'] = atr
+    ani = FuncAnimation(plt.gcf(), animate,fargs=(List,df,starting_data), interval=1000)
     plt.show()
-def trading_test(List,historical_data):
-    print('trading_test() started')
-    getCandels("BTCUSDT","5m",List)
+
+def trading_test(List,starting_data):
+    getCandels("BTCUSDT","5m",List,starting_data)
    
    
 def foo():
@@ -380,20 +455,46 @@ def main():
         action = cmd_actions.get(cmd, invalid_input)
         action()
 
-
+def menu(args):
+    if args[1] == '-h':
+        print()
+        print("""
+               1- cancel all open orders for specific symbol:
+                  python3 cryptoTrading.py cancel_all <SYMBOL>
+               
+               2- get account details:
+                  python3 cryptoTrading.py account                  
+                
+                
+                  """)
+    if args[1] == 'cancel_all':
+        if len(args) !=3:
+            print('python3 cryptoTrading.py cancel_all <SYMBOL>')
+        else:
+            cancel_all_open_orders(args[2].upper())
+    if args[1]=='account':
+        if len(args) !=2:
+            print('python3 cryptoTrading.py account')
+        else:
+            print(client.account())
 if __name__ == '__main__':
+    if len(args)>1:        
+        menu(args)
+        
     manager = mp.Manager()
     List = manager.list() #list to be shared between processes
-    historical_data =manager.list()
+    starting_data = manager.dict()
+    starting_data['position'] = False
+    starting_data['stop_loss'] = 0
+    starting_data['profit'] =0
+    starting_data['portfolio'] =100
+    starting_data['starting_portfolio'] =100
+    starting_data['shares'] = 0
     freeze_support()
-    p1=mp.Process(target=trading_test, args=(List,historical_data))
-    p2=mp.Process(target=ploting, args=(List,historical_data))
+    p1=mp.Process(target=trading_test, args=(List,starting_data))
+    p2=mp.Process(target=ploting, args=(List,starting_data))
     p1.start()
     p2.start()
     p1.join()
     p1.join()
-
-
-
-
 
