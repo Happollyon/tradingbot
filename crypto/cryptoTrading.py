@@ -73,7 +73,8 @@ my_columns = [
         ]
 
 def place_order(symbol,side,typee,quantity):
-    
+    print(type(quantity))
+    print(side)
     params = {
     
     "symbol": symbol,
@@ -325,20 +326,24 @@ def simulation():
 def on_message(List,starting_data,ws,message):
     
     message2 = json.loads(message) 
-    sell_action = sell(float(message2['k']['o']),starting_data)
+    sell_action = sell(float(message2['k']['c']),starting_data)
     
     if sell_action:
         data = message2['k']
         NaN = np.nan
-        time = datetime.datetime.utcfromtimestamp(data['t']/1000)    
-        List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,data['o'],NaN,NaN])
-        
+        print(datetime.datetime.utcfromtimestamp(data['T']/1000))
+        time = datetime.datetime.utcfromtimestamp(message2['E']/1000)
+        print(time)
+        print(datetime.datetime.utcfromtimestamp(message2['E']/1000))
+        List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,data['c'],NaN,NaN])
+        print(List)        
     if message2['k']['x']==True:
+        print('one minute has passed')
         data = message2['k']
         NaN = np.nan
-        time = datetime.datetime.utcfromtimestamp(data['t']/1000)    
+        time = datetime.datetime.utcfromtimestamp(message2['E']/1000)    
         List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
-        
+        print(List)
     
 def on_close():
     print('FAGNER, CONNECTION HAS BEEN CLOSED!!!')
@@ -346,24 +351,35 @@ def on_close():
 #initializes websocket args: symbol and List (List shared between process )           
 def getCandels(symbol,interval,List,starting_data):
     
-    url = 'wss://stream.binance.com:9443/ws/btcusdt@kline_1m'
+    url = 'wss:N//stream.binance.com:9443/ws/btcusdt@kline_1m'
     ws= websocket.WebSocketApp(url, on_message=on_message,on_close=on_close)
     ws.on_message = lambda *x: on_message(List,starting_data, *x)
     ws.run_forever()
 
 
 def buy(ema3,ema6,ema9,price,time,starting_data,atr):
-    print('here buy')
-    if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False:
-        starting_data['stop_loss'] = price - ( atr * 1.5 )
-        starting_data['profit'] = price + (atr * 3)
-        starting_data['shares'] = protfolio/price
-        starting_data['portfolio'] = 0
-        starting_data['position'] = True
-        response =place_order('BTCUSDT','BUY','MARKET',starting_data['shares'])   
-        if response['status'] != 'filed':
-            print('not filled')
-        return True
+    
+    #if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False:
+    if starting_data['position']==False:
+        shares = starting_data['portfolio']/price
+        shares = round(shares,6)
+        response =place_order('BTCUSDT','BUY','MARKET',shares)   
+        if  response['status'] != 'filed':
+            
+            payed_price = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
+            #starting_data['stop_loss'] = price - ( atr * 1.5 )
+           # starting_data['profit'] = price + (atr * 3)
+            starting_data['stop_loss'] = price - 1
+            starting_data['profit'] = price + 1
+            starting_data['shares'] = starting_data['portfolio']/price
+            starting_data['portfolio'] = 0
+            starting_data['position'] = True
+            price_share= price*starting_data['shares']
+            print(f'price: {price_share}  -- payed_price {payed_price}')
+            return True
+        else:
+            print('order not filled')    
+            return False 
     return False
 
 def sell(price, starting_data):
@@ -372,41 +388,52 @@ def sell(price, starting_data):
     stop_loss = starting_data['stop_loss']
     
     if price >= profit and position==True or price <= stop_loss  and position == True:
-        print('heree')
+        print('sell')           
         portfolio = starting_data['shares']*price
         starting_data['portfolio']=portfolio
-        starting_position['position'] = False
-        print('inside if inside sell')
+        starting_data['position'] = False
+        
         return True
     
     return False         
 
 #Animate function is called by ploting function
-def animate(self,List, df,starting_data):
-    data = list(List)
+def animate(self,List,df,starting_data):
+
+    data =list(List)
     size = len(data)
-    for i in range(5):
-        print(i)
-        time.sleep(2)
-    if size > 0:
-        df_size = len(df.index)
-        df.loc[df_size+1]= data[size-1]
-        ema9 = calc_ema(df,9)
-        ema6 = calc_ema(df,6)
-        ema3 = calc_ema(df,3)
-        atr = calculate_atr(df,14)
-        df['ATR'] = atr
-        df['EMA9'] = ema9
-        df['EMA6'] = ema6
-        df['EMA3'] = ema6
-        buy_action=False
-        if starting_data['position']:
-            buy_action = buy(df.loc[df_size+1,'EMA3'],df.loc[df_size+1,'EMA6'],df.loc[df_size+1,'EMA9'],df.loc[df_size+1,'close'],df.loc[df_size+1,'open-time'],starting_data,df.loc[df_size+1,'ATR'])
-        
-        if buy_action:
-            df['BUY'] = df.loc[df_size + 1,'close']
+    df_size = len(df.index)
+    print(f"df {df_size} data {size}") 
+    if size> 0:
+        print(df.loc[df_size-1,'open-time'])
+        print(data[size-1][0])
+        if  df.loc[df_size-1,'open-time'] != data[size-1][0]:
+            print('inside if open-time diferente than data time')   
+            df.loc[df_size]= data[size-1]
+            ema9 = calc_ema(df,9)
+            ema6 = calc_ema(df,6)
+            ema3 = calc_ema(df,3)
+            atr = calculate_atr(df,14)
+            df['ATR'] = atr
+            df['EMA9'] = ema9
+            df['EMA6'] = ema6
+            df['EMA3'] = ema6
+            buy_action=False
+            print('after df is updated')
+            print('------')
+            print(df.loc[df_size,'SELL'])
+            if not starting_data['position'] and  pd.isna(df.loc[df_size,'SELL']):
+                print('inside if sell is na')
+                buy_action = buy(df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'])
+            
+                if buy_action:
+                    print('inside if buy is true')
+                    df.loc[df_size,'BUY'] = df.loc[df_size,'close']
     plt.cla()
     plt.plot(df['open-time'],df['close'],label = "Price")
+    plt.scatter(df['open-time'],df['BUY'],label = "Buy",color='green')
+    plt.scatter(df['open-time'],df['SELL'],label = "Sell",color='red')
+    
     plt.legend(loc='upper left')
     plt.tight_layout()
 
@@ -465,7 +492,8 @@ def menu(args):
                2- get account details:
                   python3 cryptoTrading.py account                  
                 
-                
+               3- sells everthing:
+                  python3 cryptoTrading.py sell_all <SYMBOL>  
                   """)
     if args[1] == 'cancel_all':
         if len(args) !=3:
@@ -477,6 +505,15 @@ def menu(args):
             print('python3 cryptoTrading.py account')
         else:
             print(client.account())
+    if args[1]=='sell':
+        if len(args)!=2:
+            print('python3 cryptoTrading.py sell')
+        else:
+            print(client.account())
+            symbol = input('enter symbol: ')
+            qty = input('enter qty: ')
+            response = place_order(symbol,'SELL','MARKET',qty)
+            print(response)
 if __name__ == '__main__':
     if len(args)>1:        
         menu(args)
@@ -496,5 +533,5 @@ if __name__ == '__main__':
     p1.start()
     p2.start()
     p1.join()
-    p1.join()
+    p2.join()
 
