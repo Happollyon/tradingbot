@@ -73,15 +73,13 @@ my_columns = [
         ]
 
 def place_order(symbol,side,typee,quantity):
-    print(type(quantity))
-    print(side)
-    params = {
     
+    print(side)
+    params = {    
     "symbol": symbol,
     "side": side,
     "type": typee,
     "quantity": quantity,
-    
     }
     response = client.new_order(**params)
     return response
@@ -323,52 +321,52 @@ def simulation():
 
 #every time websocet recieves a msg this function is called
 # and List is updated so graph can update 
-def on_message(List,starting_data,ws,message):
+def on_message(List,sale,starting_data,ws,message):
     
     message2 = json.loads(message) 
-    sell_action = sell(float(message2['k']['c']),starting_data)
-    
-    if sell_action:
+    sell_action,take_profit,stop_loss = sell(float(message2['k']['c']),starting_data) #calls sell func if conditons are met
+        
+    if sell_action: #if sell returns true sale data list updated
         data = message2['k']
         NaN = np.nan
-        print(datetime.datetime.utcfromtimestamp(data['T']/1000))
         time = datetime.datetime.utcfromtimestamp(message2['E']/1000)
-        print(time)
-        print(datetime.datetime.utcfromtimestamp(message2['E']/1000))
-        List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,data['c'],NaN,NaN])
-        print(List)        
-    if message2['k']['x']==True:
-        print('one minute has passed')
+        sale.append([time,float(data['c']),float(starting_data['portfolio']),take_profit,stop_loss])
+        
+                
+    if message2['k']['x']==True: #every time a candel closes main data list is updated
         data = message2['k']
         NaN = np.nan
         time = datetime.datetime.utcfromtimestamp(message2['E']/1000)    
         List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
-        print(List)
+        print('1 minute')        
     
 def on_close():
     print('FAGNER, CONNECTION HAS BEEN CLOSED!!!')
            
 #initializes websocket args: symbol and List (List shared between process )           
-def getCandels(symbol,interval,List,starting_data):
+def getCandels(symbol,interval,List,sale,starting_data):
     
-    url = 'wss:N//stream.binance.com:9443/ws/btcusdt@kline_1m'
-    ws= websocket.WebSocketApp(url, on_message=on_message,on_close=on_close)
-    ws.on_message = lambda *x: on_message(List,starting_data, *x)
+    url = 'wss://stream.binance.com:9443/ws/btcusdt@kline_1m'
+    ws= websocket.WebSocketApp(url, on_message=on_message,on_close=on_close) # starts websockets
+    ws.on_message = lambda *x: on_message(List,sale,starting_data, *x) # passes arguments to func that is called every time we receive data from sockets
     ws.run_forever()
 
 
 def buy(ema3,ema6,ema9,price,time,starting_data,atr):
     
     #if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False:
-    if starting_data['position']==False:
+    if starting_data['position']==False: # checks if there is active position
+        
         shares = starting_data['portfolio']/price
         shares = round(shares,6)
-        response =place_order('BTCUSDT','BUY','MARKET',shares)   
-        if  response['status'] != 'filed':
+        response =place_order('BTCUSDT','BUY','MARKET',shares) #calls funct that places order   
+        
+        if  response['status'] != 'filed': #if order is placed properly 
             
+            #updates starting data
             payed_price = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
             #starting_data['stop_loss'] = price - ( atr * 1.5 )
-           # starting_data['profit'] = price + (atr * 3)
+            #starting_data['profit'] = price + (atr * 3)
             starting_data['stop_loss'] = price - 1
             starting_data['profit'] = price + 1
             starting_data['shares'] = starting_data['portfolio']/price
@@ -376,73 +374,108 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr):
             starting_data['position'] = True
             price_share= price*starting_data['shares']
             print(f'price: {price_share}  -- payed_price {payed_price}')
-            return True
+            return True # returns that it was placed
+        
         else:
+            
             print('order not filled')    
-            return False 
-    return False
+            return False  # returns that order wasnt placed
+
+    return False #if everything goes wrong, returs that order wasnt placed  
 
 def sell(price, starting_data):
+    
     profit = starting_data['profit']
     position = starting_data['position'] 
     stop_loss = starting_data['stop_loss']
-    
+    shares = starting_data['shares']
+    shares = round(shares,6)
+    is_profit=0
+    is_loss =0
+    print(f'sell position: {position} ')
+    # checks that there is a position and conditions for sale a met
     if price >= profit and position==True or price <= stop_loss  and position == True:
-        print('sell')           
-        portfolio = starting_data['shares']*price
-        starting_data['portfolio']=portfolio
-        starting_data['position'] = False
+        print(f"price: {price} profit: {profit}")
+        if price>= profit:
+            is_profit=1
+            is_loss=0
+        else:
+            is_profit=0
+            is_loss=1
+        response = place_order('BTCUSDT','SELL','MARKET',shares) # calls order func
         
-        return True
+        if response: #if order is placed  starting data list is updated
+
+            portfolio = starting_data['shares']*price
+            starting_data['portfolio']=portfolio
+            starting_data['position'] = False # sets postion to no longer active
+                       
+            return  True, is_profit, is_loss; # returns that order was completed 
     
-    return False         
+    return False ,is_profit,is_loss;     # returns that order failed   
 
-#Animate function is called by ploting function
-def animate(self,List,df,starting_data):
+#Animate function is called by ploting function every second
+def animate(self,List,sale,df,sale_df,starting_data):
+    
+    data =list(List) #turns proxy main list into local list
+    sale_data = list(sale) #turns proxy main list into local list
+    sale_df_size=len(sale_df.index) #gests sales  dataframe size 
+    sale_data_size = len(sale_data) #get sale list size
+    size = len(data) # gets main  data list size .. t
+    df_size = len(df.index) # get main dataframe size
 
-    data =list(List)
-    size = len(data)
-    df_size = len(df.index)
-    print(f"df {df_size} data {size}") 
-    if size> 0:
-        print(df.loc[df_size-1,'open-time'])
-        print(data[size-1][0])
-        if  df.loc[df_size-1,'open-time'] != data[size-1][0]:
-            print('inside if open-time diferente than data time')   
-            df.loc[df_size]= data[size-1]
+    if size> 0: # if main data size > 0
+
+        if  df.loc[df_size-1,'open-time'] != data[size-1][0]: #checks if there is new row in data list/ checks for new candel
+            
+            df.loc[df_size]= data[size-1] # adds new row to main dataframe
+            # Calculates new EMA
             ema9 = calc_ema(df,9)
             ema6 = calc_ema(df,6)
             ema3 = calc_ema(df,3)
-            atr = calculate_atr(df,14)
+            atr = calculate_atr(df,14) #Calculates new ATR
             df['ATR'] = atr
             df['EMA9'] = ema9
             df['EMA6'] = ema6
             df['EMA3'] = ema6
-            buy_action=False
-            print('after df is updated')
-            print('------')
-            print(df.loc[df_size,'SELL'])
-            if not starting_data['position'] and  pd.isna(df.loc[df_size,'SELL']):
-                print('inside if sell is na')
+            
+            if not starting_data['position'] and  pd.isna(df.loc[df_size,'SELL']): # if there is no active positon
+                # runs buy func returns true or false
                 buy_action = buy(df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'])
             
-                if buy_action:
-                    print('inside if buy is true')
-                    df.loc[df_size,'BUY'] = df.loc[df_size,'close']
+                if buy_action:  
+                    df.loc[df_size,'BUY'] = df.loc[df_size,'close']#adds buy price to data frame
+
+    # if new sale row, row is added to sale df.. sale has its own df, so it can be ploted properly with price plot
+    if sale_data_size>0 and sale_df_size ==0 or sale_data_size>0 and sale_df.loc[sale_df_size-1,'time'] < sale[sale_data_size-1][0]:     
+        sale_df.loc[sale_df_size] = sale_data[sale_data_size-1] 
+        print(sale_df)
+        
+    # data potting 
+   
+    plt.subplot(2,1,1) 
     plt.cla()
     plt.plot(df['open-time'],df['close'],label = "Price")
     plt.scatter(df['open-time'],df['BUY'],label = "Buy",color='green')
-    plt.scatter(df['open-time'],df['SELL'],label = "Sell",color='red')
+    plt.scatter(sale_df['time'],sale_df['price'],label='price', color='red')
     
+    plt.subplot(2,1,2)
+    plt.cla()
+    plt.scatter(sale_df['time'],sale_df['portfolio'],label ='portfolio',color='black')
     plt.legend(loc='upper left')
     plt.tight_layout()
 
 
-#fucion that plots the graph with previous data and initializes animate function.
-#function meant to be used with Multporcessing.
-def ploting(List,starting_data):
-    data_set= get_pastData("BTCUSDT","5m")
-    df = create_dataFrame(data_set,"5m") 
+"""
+
+fucion that plots the graph with previous data and initializes animate function.
+function meant to be used with Multporcessing.
+
+"""
+def ploting(List,sale,starting_data):
+    data_set= get_pastData("BTCUSDT","5m") #gest past data so it can be plotedv
+    df = create_dataFrame(data_set,"5m") # creates data frame with past data
+    sale_df = pd.DataFrame(columns = ["time","price",'portfolio','take-profit','stop-loss'])#creates data frame to host sales data
     ema9 = calc_ema(df,9)
     ema6 = calc_ema(df,6)
     ema3 = calc_ema(df,3)
@@ -452,11 +485,12 @@ def ploting(List,starting_data):
     df['EMA3'] = np.round(ema3, decimals = 3)    
     atr = calculate_atr(df,14)
     df['ATR'] = atr
-    ani = FuncAnimation(plt.gcf(), animate,fargs=(List,df,starting_data), interval=1000)
+
+    ani = FuncAnimation(plt.gcf(), animate,fargs=(List,sale,df,sale_df,starting_data), interval=1000)# animates plot everysecond by caling animate func
     plt.show()
 
-def trading_test(List,starting_data):
-    getCandels("BTCUSDT","5m",List,starting_data)
+def trading_test(List,sale,starting_data): #process
+    getCandels("BTCUSDT","5m",List,sale,starting_data)
    
    
 def foo():
@@ -520,16 +554,19 @@ if __name__ == '__main__':
         
     manager = mp.Manager()
     List = manager.list() #list to be shared between processes
-    starting_data = manager.dict()
+    sale = manager.list()#list used to store a 
+    starting_data = manager.dict() #dict that holds starting data 
+    # populating dict 
     starting_data['position'] = False
     starting_data['stop_loss'] = 0
     starting_data['profit'] =0
-    starting_data['portfolio'] =100
+    starting_data['portfolio']=100
     starting_data['starting_portfolio'] =100
     starting_data['shares'] = 0
-    freeze_support()
-    p1=mp.Process(target=trading_test, args=(List,starting_data))
-    p2=mp.Process(target=ploting, args=(List,starting_data))
+    freeze_support() # seems to be mandatory
+    p1=mp.Process(target=trading_test, args=(List,sale,starting_data)) #creates process 1
+    p2=mp.Process(target=ploting, args=(List,sale,starting_data))   # creates process 2
+    # starts process 
     p1.start()
     p2.start()
     p1.join()
