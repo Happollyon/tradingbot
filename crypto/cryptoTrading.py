@@ -73,7 +73,7 @@ my_columns = [
         ]
 
 def place_order(symbol,side,typee,quantity):
-    
+    symbol = symbol.upper()
     print(side)
     params = {    
     "symbol": symbol,
@@ -124,11 +124,12 @@ def change24H():
 
 # gets data from binance
 def get_pastData(symbol,interval):
-    data = r.get(f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=5").json()
+    symbol =symbol.upper()
+    data = r.get(f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=350").json()
     return data 
 
 
-def create_dataFrame(data_set, symbol):
+def create_dataFrame(data_set):
  
     # creates data frame
     graph =  pd.DataFrame(columns = my_columns)
@@ -321,10 +322,10 @@ def simulation():
 
 #every time websocet recieves a msg this function is called
 # and List is updated so graph can update 
-def on_message(List,sale,starting_data,ws,message):
+def on_message(List,sale,starting_data,symbol,interval,ws,message):
     
     message2 = json.loads(message) 
-    sell_action,take_profit,stop_loss = sell(float(message2['k']['c']),starting_data) #calls sell func if conditons are met
+    sell_action,take_profit,stop_loss = sell(float(message2['k']['c']),starting_data,symbol,interval) #calls sell func if conditons are met
         
     if sell_action: #if sell returns true sale data list updated
         data = message2['k']
@@ -346,29 +347,29 @@ def on_close():
 #initializes websocket args: symbol and List (List shared between process )           
 def getCandels(symbol,interval,List,sale,starting_data):
     
-    url = 'wss://stream.binance.com:9443/ws/btcusdt@kline_1m'
+    url = f'wss://stream.binance.com:9443/ws/{symbol}@kline_{interval}'
     ws= websocket.WebSocketApp(url, on_message=on_message,on_close=on_close) # starts websockets
-    ws.on_message = lambda *x: on_message(List,sale,starting_data, *x) # passes arguments to func that is called every time we receive data from sockets
+    ws.on_message = lambda *x: on_message(List,sale,starting_data,symbol,interval, *x) # passes arguments to func that is called every time we receive data from sockets
     ws.run_forever()
 
 
-def buy(ema3,ema6,ema9,price,time,starting_data,atr):
+def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
     
-    #if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False:
-    if starting_data['position']==False: # checks if there is active position
+    if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False:
+    #if starting_data['position']==False: # checks if there is active position
         
         shares = starting_data['portfolio']/price
         shares = round(shares,6)
-        response =place_order('BTCUSDT','BUY','MARKET',shares) #calls funct that places order   
+        response =place_order(symbol,'BUY','MARKET',shares) #calls funct that places order   
         
         if  response['status'] != 'filed': #if order is placed properly 
             
             #updates starting data
             payed_price = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
-            #starting_data['stop_loss'] = price - ( atr * 1.5 )
-            #starting_data['profit'] = price + (atr * 3)
-            starting_data['stop_loss'] = price - 1
-            starting_data['profit'] = price + 1
+            starting_data['stop_loss'] = price - ( atr * 1.5 )
+            starting_data['profit'] = price + (atr * 3)
+            #starting_data['stop_loss'] = price - 1
+            #starting_data['profit'] = price + 1
             starting_data['shares'] = starting_data['portfolio']/price
             starting_data['portfolio'] = 0
             starting_data['position'] = True
@@ -383,7 +384,7 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr):
 
     return False #if everything goes wrong, returs that order wasnt placed  
 
-def sell(price, starting_data):
+def sell(price, starting_data,symbol,interval):
     
     profit = starting_data['profit']
     position = starting_data['position'] 
@@ -392,17 +393,17 @@ def sell(price, starting_data):
     shares = round(shares,6)
     is_profit=0
     is_loss =0
-    print(f'sell position: {position} ')
+    
     # checks that there is a position and conditions for sale a met
     if price >= profit and position==True or price <= stop_loss  and position == True:
-        print(f"price: {price} profit: {profit}")
+        
         if price>= profit:
             is_profit=1
             is_loss=0
         else:
             is_profit=0
             is_loss=1
-        response = place_order('BTCUSDT','SELL','MARKET',shares) # calls order func
+        response = place_order(symbol,'SELL','MARKET',shares) # calls order func
         
         if response: #if order is placed  starting data list is updated
 
@@ -415,7 +416,7 @@ def sell(price, starting_data):
     return False ,is_profit,is_loss;     # returns that order failed   
 
 #Animate function is called by ploting function every second
-def animate(self,List,sale,df,sale_df,starting_data):
+def animate(self,List,sale,df,sale_df,starting_data,symbol,interval):
     
     data =list(List) #turns proxy main list into local list
     sale_data = list(sale) #turns proxy main list into local list
@@ -441,7 +442,7 @@ def animate(self,List,sale,df,sale_df,starting_data):
             
             if not starting_data['position'] and  pd.isna(df.loc[df_size,'SELL']): # if there is no active positon
                 # runs buy func returns true or false
-                buy_action = buy(df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'])
+                buy_action = buy(df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'],symbol,interval)
             
                 if buy_action:  
                     df.loc[df_size,'BUY'] = df.loc[df_size,'close']#adds buy price to data frame
@@ -472,9 +473,10 @@ fucion that plots the graph with previous data and initializes animate function.
 function meant to be used with Multporcessing.
 
 """
-def ploting(List,sale,starting_data):
-    data_set= get_pastData("BTCUSDT","5m") #gest past data so it can be plotedv
-    df = create_dataFrame(data_set,"5m") # creates data frame with past data
+def ploting(List,sale,starting_data,symbol, interval):
+    
+    data_set= get_pastData(symbol,interval) #gest past data so it can be ploted
+    df = create_dataFrame(data_set) # creates data frame with past data
     sale_df = pd.DataFrame(columns = ["time","price",'portfolio','take-profit','stop-loss'])#creates data frame to host sales data
     ema9 = calc_ema(df,9)
     ema6 = calc_ema(df,6)
@@ -486,11 +488,19 @@ def ploting(List,sale,starting_data):
     atr = calculate_atr(df,14)
     df['ATR'] = atr
 
-    ani = FuncAnimation(plt.gcf(), animate,fargs=(List,sale,df,sale_df,starting_data), interval=1000)# animates plot everysecond by caling animate func
+    now = datetime.datetime.now()
+    current_time = now.strftime("%d%b%Y_%H%M")
+    
+    df_csv_name = f'{current_time}_df.xlsx'
+    sale_csv_name = f'{current_time}_sale.csv'
+    directory = os.getcwd()
+    directory = f'{directory}/trix/{df_csv_name}'
+    df.to_excel(df_csv_name)
+    ani = FuncAnimation(plt.gcf(), animate,fargs=(List,sale,df,sale_df,starting_data,symbol,interval), interval=1000)# animates plot everysecond by caling animate func
     plt.show()
 
-def trading_test(List,sale,starting_data): #process
-    getCandels("BTCUSDT","5m",List,sale,starting_data)
+def run_sockets(List,sale,starting_data,symbol,interval): #process
+    getCandels(symbol,interval,List,sale,starting_data)
    
    
 def foo():
@@ -516,6 +526,29 @@ def main():
         action = cmd_actions.get(cmd, invalid_input)
         action()
 
+def trade():
+    symbol = input("enter symbol: ")
+    interval = input("enter interval to trade in: ")
+    manager = mp.Manager()
+    List = manager.list() #list to be shared between processes
+    sale = manager.list()#list used to store a 
+    starting_data = manager.dict() #dict that holds starting data 
+    # populating dict 
+    starting_data['position'] = False
+    starting_data['stop_loss'] = 0
+    starting_data['profit'] =0
+    starting_data['portfolio']=100
+    starting_data['starting_portfolio'] =input('enter value to be traded: ')
+    starting_data['shares'] = 0
+    freeze_support() # seems to be mandatory
+    p1=mp.Process(target=run_sockets, args=(List,sale,starting_data,symbol,interval)) #creates process 1
+    p2=mp.Process(target=ploting, args=(List,sale,starting_data,symbol,interval))   # creates process 2
+    # starts process 
+    p1.start()
+    p2.start()
+    p1.join()
+    p2.join()
+    
 def menu(args):
     if args[1] == '-h':
         print()
@@ -539,6 +572,12 @@ def menu(args):
             print('python3 cryptoTrading.py account')
         else:
             print(client.account())
+    if args[1]=='trade':
+        if len(args) !=2:
+            print('python3 cryptoTrading.py simulate')
+        else:
+            trade()
+
     if args[1]=='sell':
         if len(args)!=2:
             print('python3 cryptoTrading.py sell')
@@ -552,23 +591,4 @@ if __name__ == '__main__':
     if len(args)>1:        
         menu(args)
         
-    manager = mp.Manager()
-    List = manager.list() #list to be shared between processes
-    sale = manager.list()#list used to store a 
-    starting_data = manager.dict() #dict that holds starting data 
-    # populating dict 
-    starting_data['position'] = False
-    starting_data['stop_loss'] = 0
-    starting_data['profit'] =0
-    starting_data['portfolio']=100
-    starting_data['starting_portfolio'] =100
-    starting_data['shares'] = 0
-    freeze_support() # seems to be mandatory
-    p1=mp.Process(target=trading_test, args=(List,sale,starting_data)) #creates process 1
-    p2=mp.Process(target=ploting, args=(List,sale,starting_data))   # creates process 2
-    # starts process 
-    p1.start()
-    p2.start()
-    p1.join()
-    p2.join()
 
