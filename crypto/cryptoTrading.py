@@ -9,6 +9,7 @@ from urllib.parse import urlencode, urljoin
 import hashlib
 import numpy as np
 import pandas as pd 
+from pandas import ExcelWriter
 import requests as r  
 import os
 import config
@@ -31,6 +32,9 @@ import concurrent.futures
 import multiprocessing as mp
 from multiprocessing import freeze_support,Manager
 from binance.error import ClientError
+import openpyxl
+from openpyxl.utils.dataframe import dataframe_to_rows
+
 """
     GETTING Arguments 
 """
@@ -416,7 +420,7 @@ def sell(price, starting_data,symbol,interval):
     return False ,is_profit,is_loss;     # returns that order failed   
 
 #Animate function is called by ploting function every second
-def animate(self,List,sale,df,sale_df,starting_data,symbol,interval):
+def animate(self,List,sale,df,sale_df,starting_data,symbol,interval,df_csv_name):
     
     data =list(List) #turns proxy main list into local list
     sale_data = list(sale) #turns proxy main list into local list
@@ -438,7 +442,7 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval):
             df['ATR'] = atr
             df['EMA9'] = ema9
             df['EMA6'] = ema6
-            df['EMA3'] = ema6
+            df['EMA3'] = ema3
             
             if not starting_data['position'] and  pd.isna(df.loc[df_size,'SELL']): # if there is no active positon
                 # runs buy func returns true or false
@@ -446,10 +450,24 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval):
             
                 if buy_action:  
                     df.loc[df_size,'BUY'] = df.loc[df_size,'close']#adds buy price to data frame
-
-    # if new sale row, row is added to sale df.. sale has its own df, so it can be ploted properly with price plot
+            
+            wb = openpyxl.load_workbook(df_csv_name)
+            ws = wb.active
+            startRow = ws.max_row +1
+            newRow =df.iloc[-1].tolist()
+            ws.append(newRow)
+            wb.save(filename=df_csv_name)
+            wb.close()
+# if new sale row, row is added to sale df.. sale has its own df, so it can be ploted properly with price plot
     if sale_data_size>0 and sale_df_size ==0 or sale_data_size>0 and sale_df.loc[sale_df_size-1,'time'] < sale[sale_data_size-1][0]:     
         sale_df.loc[sale_df_size] = sale_data[sale_data_size-1] 
+        wb = openpyxl.load_workbook(df_csv_name)
+        ws = wb.get_sheet_by_name('portfolio')
+        startRow = ws.max_row +1
+        newRow = sale_data[sale_data_size-1]
+        ws.append(newRow)
+        wb.save(filename=df_csv_name)
+        wb.close()        
         print(sale_df)
         
     # data potting 
@@ -495,8 +513,17 @@ def ploting(List,sale,starting_data,symbol, interval):
     sale_csv_name = f'{current_time}_sale.csv'
     directory = os.getcwd()
     directory = f'{directory}/trix/{df_csv_name}'
-    df.to_excel(df_csv_name)
-    ani = FuncAnimation(plt.gcf(), animate,fargs=(List,sale,df,sale_df,starting_data,symbol,interval), interval=1000)# animates plot everysecond by caling animate func
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    for r in dataframe_to_rows(df, index=False, header=True):
+        ws.append(r) 
+    wb.create_sheet('portfolio')
+    ws2 = wb.get_sheet_by_name('portfolio')
+
+    for r in dataframe_to_rows(sale_df, index=False, header = True):
+        ws2.append(r)
+    wb.save(directory)
+    ani = FuncAnimation(plt.gcf(), animate,fargs=(List,sale,df,sale_df,starting_data,symbol,interval,directory), interval=1000)# animates plot everysecond by caling animate func
     plt.show()
 
 def run_sockets(List,sale,starting_data,symbol,interval): #process
@@ -520,7 +547,7 @@ def main():
     dj.start()
 
     while 1:
-        cmd = cmd_queue.get()
+        ccmd = cmd_queue.get()
         if cmd == 'quit':
             break
         action = cmd_actions.get(cmd, invalid_input)
