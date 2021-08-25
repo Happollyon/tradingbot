@@ -361,9 +361,10 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
     
     if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False:
     #if starting_data['position']==False: # checks if there is active position
-        
+                
         shares = starting_data['portfolio']/price
         shares = round(shares,6)
+        print(shares)
         response =place_order(symbol,'BUY','MARKET',shares) #calls funct that places order   
         
         if  response['status'] != 'filed': #if order is placed properly 
@@ -558,9 +559,18 @@ def trade():
     symbol = input("enter symbol: ")
     interval = input("enter interval to trade in: ")
     manager = mp.Manager()
+    symbol_info = r.get(f'https://api.binance.com/api/v3/exchangeInfo?symbol={symbol.upper()}').json()
     List = manager.list() #list to be shared between processes
     sale = manager.list()#list used to store a 
     starting_data = manager.dict() #dict that holds starting data 
+    for filt in symbol_info['filters']:
+        if filt['filterType'] == 'LOT_SIZE':
+            step_size = filt['stepSize'].find('1') - 2
+            starting_data['step_size'] = step_size
+            print(f'step_size: {step_size}')
+            break
+   
+
     # populating dict 
     starting_data['position'] = False
     starting_data['stop_loss'] = 0

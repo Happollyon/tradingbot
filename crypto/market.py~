@@ -10,6 +10,6 @@ newlist = sorted(response, key=lambda k: k['price_change_percentage_1h_in_curren
 
 for coin in newlist:
     symbol =coin['symbol']
-    oneH=coin['price_change_percentage_1h_in_currency']
+    oneH=coin['symbol'],coin['price_change_percentage_1h_in_currency']
     two4H=coin['price_change_percentage_24h']
     print( f'{symbol}: 1h: {oneH}% , 12h: {two4H} ')
