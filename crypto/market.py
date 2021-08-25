@@ -1,0 +1,12 @@
+"""
+https://api.binance.com/api/v1/exchangeInfo    
+https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false&price_change_percentage=1h
+"""
+import requests as r 
+
+response = r.get('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false&price_change_percentage=1h').json()
+
+newlist = sorted(response, key=lambda k: k['market_cap_change_percentage_24h'])
+
+for coin in newlist:
+    print(coin['price_change_percentage_1h_in_currency'])

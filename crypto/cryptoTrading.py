@@ -50,8 +50,8 @@ BINANCE_SECRET_KEY = config.BINANCE_SECRET_KEY
 
 test_url = 'https://testnet.binance.vision'
 #creates client obj
-#client = Spot(key=BINANCE_KEY,secret = BINANCE_SECRET_KEY)
-client = Spot(testkey, testSecret,base_url=test_url)
+client = Spot(key=BINANCE_KEY,secret = BINANCE_SECRET_KEY)
+#client = Spot(testkey, testSecret,base_url=test_url)
 
 headers = {
     'X-MBX-APIKEY': testkey
@@ -554,6 +554,7 @@ def main():
         action()
 
 def trade():
+    
     symbol = input("enter symbol: ")
     interval = input("enter interval to trade in: ")
     manager = mp.Manager()
