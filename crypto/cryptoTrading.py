@@ -363,7 +363,7 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
     #if starting_data['position']==False: # checks if there is active position
                 
         shares = starting_data['portfolio']/price
-        shares = round(shares,6)
+        shares = round(shares,starting_data[step_size])
         print(shares)
         response =place_order(symbol,'BUY','MARKET',shares) #calls funct that places order   
         
@@ -563,7 +563,7 @@ def trade():
     List = manager.list() #list to be shared between processes
     sale = manager.list()#list used to store a 
     starting_data = manager.dict() #dict that holds starting data 
-    for filt in symbol_info['filters']:
+    for filt in symbol_info['symbols'][0]['filters']:
         if filt['filterType'] == 'LOT_SIZE':
             step_size = filt['stepSize'].find('1') - 2
             starting_data['step_size'] = step_size
