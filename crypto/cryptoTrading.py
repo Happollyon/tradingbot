@@ -363,8 +363,7 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
     #if starting_data['position']==False: # checks if there is active position
                 
         shares = starting_data['portfolio']/price
-        shares = round(shares,starting_data[step_size])
-        print(shares)
+        shares = round(shares,starting_data['step_size'])
         response =place_order(symbol,'BUY','MARKET',shares) #calls funct that places order   
         
         if  response['status'] != 'filed': #if order is placed properly 
@@ -387,7 +386,7 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
             print('order not filled')    
             return False  # returns that order wasnt placed
 
-    return False #if everything goes wrong, returs that order wasnt placed  
+    return False    #if everything goes wrong, returs that order wasnt placed  
 
 def sell(price, starting_data,symbol,interval):
     
@@ -395,7 +394,7 @@ def sell(price, starting_data,symbol,interval):
     position = starting_data['position'] 
     stop_loss = starting_data['stop_loss']
     shares = starting_data['shares']
-    shares = round(shares,6)
+    shares = round(shares,starting_data['step_size'])
     is_profit=0
     is_loss =0
     
@@ -563,6 +562,7 @@ def trade():
     List = manager.list() #list to be shared between processes
     sale = manager.list()#list used to store a 
     starting_data = manager.dict() #dict that holds starting data 
+    portfolio =input('enter value to be traded: ')
     for filt in symbol_info['symbols'][0]['filters']:
         if filt['filterType'] == 'LOT_SIZE':
             step_size = filt['stepSize'].find('1') - 2
@@ -570,13 +570,13 @@ def trade():
             print(f'step_size: {step_size}')
             break
    
-
+    
     # populating dict 
     starting_data['position'] = False
     starting_data['stop_loss'] = 0
     starting_data['profit'] =0
-    starting_data['portfolio']=100
-    starting_data['starting_portfolio'] =input('enter value to be traded: ')
+    starting_data['portfolio']= float(portfolio)
+    starting_data['starting_portfolio'] = float(portfolio)
     starting_data['shares'] = 0
     freeze_support() # seems to be mandatory
     p1=mp.Process(target=run_sockets, args=(List,sale,starting_data,symbol,interval)) #creates process 1
