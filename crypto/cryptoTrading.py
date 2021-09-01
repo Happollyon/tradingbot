@@ -374,7 +374,7 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
             starting_data['profit'] = price + (atr * 3)
             #starting_data['stop_loss'] = price - 1
             #starting_data['profit'] = price + 1
-            starting_data['shares'] = starting_data['portfolio']/price
+            starting_data['shares'] = float(response['executedQty'])
             starting_data['portfolio'] = 0
             starting_data['position'] = True
             price_share= price*starting_data['shares']
