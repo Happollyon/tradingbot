@@ -336,7 +336,9 @@ def on_message(List,sale,starting_data,symbol,interval,ws,message):
         NaN = np.nan
         time = datetime.datetime.utcfromtimestamp(message2['E']/1000)
         sale.append([time,float(data['c']),float(starting_data['portfolio']),take_profit,stop_loss])
-        
+        if interval == "1m":
+            starting_data['skip']=3
+            print(starting_data['skip'])
                 
     if message2['k']['x']==True: #every time a candel closes main data list is updated
         data = message2['k']
@@ -359,7 +361,7 @@ def getCandels(symbol,interval,List,sale,starting_data):
 
 def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
     
-    if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False:
+    if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False and starting_data==0:
     #if starting_data['position']==False: # checks if there is active position
                 
         shares = starting_data['portfolio']/price
@@ -446,6 +448,9 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval,df_csv_name)
             
             if not starting_data['position'] and  pd.isna(df.loc[df_size,'SELL']): # if there is no active positon
                 # runs buy func returns true or false
+                if interval == '1m':
+                    starting_data['skip']=starting_data['skip'] - 1
+                
                 buy_action = buy(df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'],symbol,interval)
             
                 if buy_action:  
@@ -572,6 +577,7 @@ def trade():
    
     
     # populating dict 
+    starting_data['skip'] = 0
     starting_data['position'] = False
     starting_data['stop_loss'] = 0
     starting_data['profit'] =0
