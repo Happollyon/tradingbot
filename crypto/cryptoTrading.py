@@ -361,7 +361,7 @@ def getCandels(symbol,interval,List,sale,starting_data):
 
 def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
     
-    if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False and starting_data==0:
+    if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False and starting_data['skip']==0:
     #if starting_data['position']==False: # checks if there is active position
                 
         shares = starting_data['portfolio']/price
@@ -372,17 +372,19 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
             
             #updates starting data
             payed_price = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
-            starting_data['stop_loss'] = price - ( atr * 1.5 )
-            starting_data['profit'] = price + (atr * 3)
+            stop_loss=starting_data['stop_loss'] = price - ( atr * 1.5 )
+            profit=starting_data['profit'] = price + (atr * 3)
             #starting_data['stop_loss'] = price - 1
             #starting_data['profit'] = price + 1
-            starting_data['shares'] = float(response['executedQty'])
+            qty = starting_data['shares'] = float(response['executedQty'])
             starting_data['portfolio'] = 0
             starting_data['position'] = True
             price_share= price*starting_data['shares']
-            print(f'price: {price_share}  -- payed_price {payed_price}')
+            print(f"""price|  payed_price  |   qty    |   ATR  |  profit  |  stop_loss  
+                        {price}  {payed_price} {qty}    {atr}    {profit}   {stop_loss} 
+                    """)
             return True # returns that it was placed
-        
+                 
         else:
             
             print('order not filled')    
@@ -395,7 +397,7 @@ def sell(price, starting_data,symbol,interval):
     profit = starting_data['profit']
     position = starting_data['position'] 
     stop_loss = starting_data['stop_loss']
-    shares = starting_data['shares']
+    shares = starting_data['shares']*0.999
     shares = round(shares,starting_data['step_size'])
     is_profit=0
     is_loss =0
@@ -448,7 +450,7 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval,df_csv_name)
             
             if not starting_data['position'] and  pd.isna(df.loc[df_size,'SELL']): # if there is no active positon
                 # runs buy func returns true or false
-                if interval == '1m':
+                if interval == '1m' and starting_data['skip']>0:
                     starting_data['skip']=starting_data['skip'] - 1
                 
                 buy_action = buy(df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'],symbol,interval)
@@ -571,6 +573,8 @@ def trade():
     for filt in symbol_info['symbols'][0]['filters']:
         if filt['filterType'] == 'LOT_SIZE':
             step_size = filt['stepSize'].find('1') - 2
+            if step_size<0:
+                step_size=0
             starting_data['step_size'] = step_size
             print(f'step_size: {step_size}')
             break
