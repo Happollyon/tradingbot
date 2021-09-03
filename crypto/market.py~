@@ -20,7 +20,9 @@ for coin in newlist:
     symbol =coin['symbol']
     oneH=coin['price_change_percentage_1h_in_currency']
     two4H=coin['price_change_percentage_24h']
-    print( f'{symbol}: 1h: {oneH}% , 24h: {two4H} ')
+    price = coin['current_price']
+    
+    print( f'{symbol}: price: {price} 1h: {oneH}% , 24h: {two4H} ')
 
 current_coin_index = find(newlist,'symbol','btc')
 if current_coin_index < 99:

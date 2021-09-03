@@ -372,17 +372,26 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
             
             #updates starting data
             payed_price = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
-            stop_loss=starting_data['stop_loss'] = price - ( atr * 1.5 )
-            profit=starting_data['profit'] = price + (atr * 3)
+            stop_loss=starting_data['stop_loss'] = payed_price - ( atr * 1.5 )
+            profit=starting_data['profit'] = payed_price + (atr * 3)
             #starting_data['stop_loss'] = price - 1
             #starting_data['profit'] = price + 1
             qty = starting_data['shares'] = float(response['executedQty'])
             starting_data['portfolio'] = 0
             starting_data['position'] = True
             price_share= price*starting_data['shares']
-            print(f"""price|  payed_price  |   qty    |   ATR  |  profit  |  stop_loss  
-                        {price}  {payed_price} {qty}    {atr}    {profit}   {stop_loss} 
-                    """)
+            print(f"""
+            --------------------------------------------------------------------------------
+                                            BUY
+            --------------------------------------------------------------------------------
+            price:{price}
+            payed_price:{payed_price}
+            qty:{qty}
+            ATR:{atr}
+            profit:{profit}
+            stop_loss:{stop_loss}  
+            ================================================================================
+            """)
             return True # returns that it was placed
                  
         else:
@@ -398,10 +407,9 @@ def sell(price, starting_data,symbol,interval):
     position = starting_data['position'] 
     stop_loss = starting_data['stop_loss']
     shares = starting_data['shares']
-    shares = round(shares,starting_data['step_size'])
     is_profit=0
     is_loss =0
-    
+     
     # checks that there is a position and conditions for sale a met
     if price >= profit and position==True or price <= stop_loss  and position == True:
         
