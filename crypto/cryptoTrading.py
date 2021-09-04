@@ -371,9 +371,10 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
         if  response['status'] != 'filed': #if order is placed properly 
             
             #updates starting data
+            actual_price=  sum(float(fill['price'])for fill in response['fills'])
             payed_price = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
-            stop_loss=starting_data['stop_loss'] = float(response['price']) - ( atr * 1.5 )
-            profit=starting_data['profit'] = float(response['price']) + (atr * 3)
+            stop_loss=starting_data['stop_loss'] = actual_price - ( atr * 1.5 )
+            profit=starting_data['profit'] = actual_price + (atr * 3)
             #starting_data['stop_loss'] = price - 1
             #starting_data['profit'] = price + 1
             qty = starting_data['shares'] = float(response['executedQty'])
@@ -384,7 +385,8 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
             --------------------------------------------------------------------------------
                                             BUY
             --------------------------------------------------------------------------------
-            price:{price}
+            price_sent:{price}
+            actual_price:{actual_price}
             payed_price:{payed_price}
             qty:{qty}
             ATR:{atr}
@@ -422,11 +424,24 @@ def sell(price, starting_data,symbol,interval):
         response = place_order(symbol,'SELL','MARKET',shares) # calls order func
         
         if response: #if order is placed  starting data list is updated
-
+            qty = float(response['executedQty'])
+            price = sum(float(fill['price']) for fill in response['fills'])
+            prof = qty*price
             portfolio = starting_data['shares']*price
             starting_data['portfolio']=portfolio
             starting_data['position'] = False # sets postion to no longer active
-                       
+            print(f"""
+            --------------------------------------------------------------------
+            ##########################**SELL**##################################
+            --------------------------------------------------------------------
+            Price:{price}
+            Qty: {qty}
+            Price * Qty: {prof}
+            portfolio**: {portfolio}
+            Is profit? : {is_profit}
+            Portifolio % change: to be updated
+            ====================================================================
+                    """)          
             return  True, is_profit, is_loss; # returns that order was completed 
     
     return False ,is_profit,is_loss;     # returns that order failed   

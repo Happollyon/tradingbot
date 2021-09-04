@@ -33,12 +33,11 @@ current_coin_index = find(newlist,'symbol','btc')
 
    
 for i in range(99,0,-1):
-    global new_symbol
     new_symbol = newlist[i]['symbol'].upper()
-    new_symbol = symbol+'USDT'
+    new_symbol = new_symbol+'USDT'
     response  = r.get(f'https://api.binance.com/api/v3/exchangeInfo?symbol={new_symbol}')
     print(response.status_code)
     if response.status_code==200:
-        print('symbol: ',newlist[i]['price_change_percentage_1h_in_currency'],'current_coin: ',newlist[current_coin_index]['price_change_percentage_1h_in_currency'])
+        print('symbol: ',new_symbol,newlist[i]['price_change_percentage_1h_in_currency'],'current_coin: ',newlist[current_coin_index]['price_change_percentage_1h_in_currency'])
         break 
 
