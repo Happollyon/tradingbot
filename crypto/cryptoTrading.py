@@ -78,7 +78,6 @@ my_columns = [
 
 def place_order(symbol,side,typee,quantity):
     symbol = symbol.upper()
-    print(side)
     params = {    
     "symbol": symbol,
     "side": side,
@@ -337,7 +336,7 @@ def on_message(List,sale,starting_data,symbol,interval,ws,message):
         time = datetime.datetime.utcfromtimestamp(message2['E']/1000)
         sale.append([time,float(data['c']),float(starting_data['portfolio']),take_profit,stop_loss])
         if interval == "1m":
-            starting_data['skip']=3
+            starting_data['skip']=2
             print(starting_data['skip'])
                 
     if message2['k']['x']==True: #every time a candel closes main data list is updated
@@ -345,7 +344,7 @@ def on_message(List,sale,starting_data,symbol,interval,ws,message):
         NaN = np.nan
         time = datetime.datetime.utcfromtimestamp(message2['E']/1000)    
         List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
-        print('1 minute')        
+        print('new candle')        
     
 def on_close():
     print('FAGNER, CONNECTION HAS BEEN CLOSED!!!')
@@ -371,7 +370,7 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
         if  response['status'] != 'filed': #if order is placed properly 
             
             #updates starting data
-            actual_price=  sum(float(fill['price'])for fill in response['fills'])
+            actual_price=  sum(float(fill['price'])for fill in response['fills'])/len(response['fills'])
             payed_price = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
             stop_loss=starting_data['stop_loss'] = actual_price - ( atr * 1.5 )
             profit=starting_data['profit'] = actual_price + (atr * 3)
@@ -385,15 +384,17 @@ def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
             --------------------------------------------------------------------------------
                                             BUY
             --------------------------------------------------------------------------------
-            price_sent:{price}
-            actual_price:{actual_price}
-            payed_price:{payed_price}
-            qty:{qty}
-            ATR:{atr}
-            profit:{profit}
-            stop_loss:{stop_loss}  
+            | price_sent:   {price}
+            | actual_price: {actual_price}
+            | payed_price:  {payed_price}
+            | qty:          {qty}
+            | ATR:          {atr}
+            ________________________________________________________________________________
+            | profit:       {profit}
+            | stop_loss:    {stop_loss}  
             ================================================================================
             """)
+            print('\a')
             return True # returns that it was placed
                  
         else:
@@ -425,21 +426,22 @@ def sell(price, starting_data,symbol,interval):
         
         if response: #if order is placed  starting data list is updated
             qty = float(response['executedQty'])
-            price = sum(float(fill['price']) for fill in response['fills'])
+            price = sum(float(fill['price']) for fill in response['fills'])/len(response['fills'])
             prof = qty*price
             portfolio = starting_data['shares']*price
             starting_data['portfolio']=portfolio
             starting_data['position'] = False # sets postion to no longer active
+            print('\a')
             print(f"""
             --------------------------------------------------------------------
             ##########################**SELL**##################################
             --------------------------------------------------------------------
-            Price:{price}
-            Qty: {qty}
-            Price * Qty: {prof}
-            portfolio**: {portfolio}
-            Is profit? : {is_profit}
-            Portifolio % change: to be updated
+            | Price:        {price}
+            | Qty:          {qty}
+            | Price * Qty:  {prof}
+            | portfolio**:  {portfolio}
+            | Is profit? :  {is_profit}
+            | Portifolio %  change: to be updated
             ====================================================================
                     """)          
             return  True, is_profit, is_loss; # returns that order was completed 
@@ -498,7 +500,7 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval,df_csv_name)
         ws.append(newRow)
         wb.save(filename=df_csv_name)
         wb.close()        
-        print(sale_df)
+        
         
     # data potting 
    

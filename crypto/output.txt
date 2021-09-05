@@ -1,0 +1,1 @@
+enter symbol: enter interval to trade in: enter value to be traded: step_size: 1
