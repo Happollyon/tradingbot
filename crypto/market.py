@@ -38,7 +38,7 @@ newlist = sorted(response, key=lambda k: k['price_change_percentage_1h_in_curren
 current_coin_index = find(newlist,'symbol','btc')
 
    
-for i in range(99,89,-1):
+for i in range(99,79,-1):
     new_symbol = newlist[i]['symbol'].upper()
     oneH=newlist[i]['price_change_percentage_1h_in_currency']
     two4H =newlist[i]['price_change_percentage_24h']
@@ -77,7 +77,7 @@ for i in range(99,89,-1):
         df['ema9M']= calc_ema(df['priceMinute'],9)
         df['ema12M']= calc_ema(df['priceMinute'],12)
         df['ema26M']= calc_ema(df['priceMinute'],26)
-        macdM=df['macdM'].loc[len(df)-1] =df['ema12M'].loc[len(df)-1] -  df['ema26M'].loc[len(df)-1]
+        macdM=df.loc[len(df)-1,'macdM'] =df.loc[len(df)-1,'ema12M'] -  df.loc[len(df)-1,'ema26M']
         print( f'{new_symbol}: price: {price} 1h: {oneH}% , 24h: {two4H} , MACDH: {macdH}, MACDM: {macdM}')
 
 

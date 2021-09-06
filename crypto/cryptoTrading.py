@@ -1,5 +1,4 @@
 """
-    df = create_dataFrame(data_)
     Fagner Nunes 07/2021
     trading bot using binance API
 """
@@ -66,6 +65,9 @@ my_columns = [
             "high",
             "low",
             "close",
+            "MACD",
+            "EMA26",
+            "EMA12",
             "EMA9",
             "EMA6",
             "EMA3",
@@ -154,6 +156,9 @@ def create_dataFrame(data_set):
                 'N/A',
                 'N/A',
                 'N/A',
+                'NA',
+                'NA',
+                'NA',
                 NaN,
                NaN,
                NaN,
@@ -343,7 +348,7 @@ def on_message(List,sale,starting_data,symbol,interval,ws,message):
         data = message2['k']
         NaN = np.nan
         time = datetime.datetime.utcfromtimestamp(message2['E']/1000)    
-        List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
+        List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
         print('new candle')        
     
 def on_close():
@@ -358,9 +363,9 @@ def getCandels(symbol,interval,List,sale,starting_data):
     ws.run_forever()
 
 
-def buy(ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
-    
-    if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False and starting_data['skip']==0:
+def buy(macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
+    print(f"macd: {macd}")
+    if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False and starting_data['skip']==0 and macd>0:
     #if starting_data['position']==False: # checks if there is active position
                 
         shares = starting_data['portfolio']/price
@@ -464,21 +469,28 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval,df_csv_name)
             
             df.loc[df_size]= data[size-1] # adds new row to main dataframe
             # Calculates new EMA
+            ema26 = calc_ema(df,26)
+            ema12 = calc_ema(df,12)
             ema9 = calc_ema(df,9)
             ema6 = calc_ema(df,6)
             ema3 = calc_ema(df,3)
+            
+            
             atr = calculate_atr(df,14) #Calculates new ATR
+            
             df['ATR'] = atr
             df['EMA9'] = ema9
             df['EMA6'] = ema6
             df['EMA3'] = ema3
-            
+            df['EMA12'] = ema12
+            df['EMA26'] = ema26
+            df.loc[df_size, 'MACD']= df.loc[df_size, 'EMA12']-df.loc[df_size, 'EMA26']
             if not starting_data['position'] and  pd.isna(df.loc[df_size,'SELL']): # if there is no active positon
                 # runs buy func returns true or false
                 if interval == '1m' and starting_data['skip']>0:
                     starting_data['skip']=starting_data['skip'] - 1
                 
-                buy_action = buy(df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'],symbol,interval)
+                buy_action = buy(df.loc[df_size, 'MACD'],df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'],symbol,interval)
             
                 if buy_action:  
                     df.loc[df_size,'BUY'] = df.loc[df_size,'close']#adds buy price to data frame
