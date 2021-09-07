@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 
 def calc_ema(dataset,n):
-    ema = dataset.ewm(span=n).mean()
+    ema = dataset.ewm(span=n,adjust=False, ignore_na=False).mean()
     return ema
 
 def find(lst, key, value):
@@ -79,5 +79,5 @@ for i in range(99,79,-1):
         df['ema26M']= calc_ema(df['priceMinute'],26)
         macdM=df.loc[len(df)-1,'macdM'] =df.loc[len(df)-1,'ema12M'] -  df.loc[len(df)-1,'ema26M']
         print( f'{new_symbol}: price: {price} 1h: {oneH}% , 24h: {two4H} , MACDH: {macdH}, MACDM: {macdM}')
-
-
+        print(df)
+        break

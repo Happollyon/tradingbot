@@ -79,5 +79,4 @@ for i in range(99,79,-1):
         df['ema26M']= calc_ema(df['priceMinute'],26)
         macdM=df.loc[len(df)-1,'macdM'] =df.loc[len(df)-1,'ema12M'] -  df.loc[len(df)-1,'ema26M']
         print( f'{new_symbol}: price: {price} 1h: {oneH}% , 24h: {two4H} , MACDH: {macdH}, MACDM: {macdM}')
-        print(df)
-        break
+        

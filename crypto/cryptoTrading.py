@@ -334,7 +334,7 @@ def on_message(List,sale,starting_data,symbol,interval,ws,message):
     
     message2 = json.loads(message) 
     sell_action,take_profit,stop_loss = sell(float(message2['k']['c']),starting_data,symbol,interval) #calls sell func if conditons are met
-    print('low: ',message2['k']['l'],' price: ',message2['k']['c'])    
+        
     if sell_action: #if sell returns true sale data list updated
         data = message2['k']
         NaN = np.nan
@@ -350,7 +350,7 @@ def on_message(List,sale,starting_data,symbol,interval,ws,message):
         time = datetime.datetime.utcfromtimestamp(message2['E']/1000)    
         List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
         print('new candle')        
-        print('CLOSE++++ low: ',message2['k']['l'],' price: ',message2['k']['c'])  
+         
 def on_close():
     print('FAGNER, CONNECTION HAS BEEN CLOSED!!!')
            
@@ -363,7 +363,7 @@ def getCandels(symbol,interval,List,sale,starting_data):
     ws.run_forever()
 
 
-def buy(macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
+def buy(lowest,macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
     print(f"macd: {macd}")
     if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False and starting_data['skip']==0 and macd>0:
     #if starting_data['position']==False: # checks if there is active position
@@ -377,8 +377,8 @@ def buy(macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
             #updates starting data
             actual_price=  sum(float(fill['price'])for fill in response['fills'])/len(response['fills'])
             payed_price = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
-            stop_loss=starting_data['stop_loss'] = actual_price - ( atr * 1.5 )
-            profit=starting_data['profit'] = actual_price + (atr * 3)
+            stop_loss=starting_data['stop_loss'] = lowest - ( atr * 1 )
+            profit=starting_data['profit'] = actual_price + (atr * 2)
             #starting_data['stop_loss'] = price - 1
             #starting_data['profit'] = price + 1
             qty = starting_data['shares'] = float(response['executedQty'])
@@ -490,8 +490,8 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval,df_csv_name)
                 # runs buy func returns true or false
                 if interval == '1m' and starting_data['skip']>0:
                     starting_data['skip']=starting_data['skip'] - 1
-                buy_action=False    
-            #    buy_action = buy(df.loc[df_size, 'MACD'],df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'],symbol,interval)
+                    
+                buy_action = buy(df.loc[df_size, 'low'],df.loc[df_size, 'MACD'],df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'],symbol,interval)
             
                 if buy_action:  
                     df.loc[df_size,'BUY'] = df.loc[df_size,'close']#adds buy price to data frame
