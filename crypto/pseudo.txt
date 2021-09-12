@@ -1,0 +1,13 @@
+
+change():
+
+	select highest % changes
+	request past data to calculate MACD for each 
+	create dataframes and save it into dict
+	create websockets for each symbol
+		every minute update price and MACD // response
+			calculate MACD % change
+			calculate price % change
+		return   PRICE  PRICE PRICE_CHANGE  MACD MACD_CHANGE // ORDER BY MACD CHANGE
+
+ 
