@@ -178,7 +178,6 @@ weights = np.arange(1,11)
 
 # calculating the wma 10
 """
-
 A lambda function is a small anonymous function. 
 A lambda function can take any number of arguments, but can only have one expression.
 lambda arguments : expression
@@ -234,7 +233,8 @@ def buy_sell(graph,port):
     portfolio = port
     starting_portfolio = portfolio
     shares = 0
-
+    win = 0
+    loose = 0
     
     
     for row in graph.index[15:]:
@@ -245,17 +245,24 @@ def buy_sell(graph,port):
         EMA9 = graph.loc[row,'EMA9']
         price = graph.loc[row,'close']
         time =  graph.loc[row, 'open-time']
-        
-        if EMA3 > EMA6 and EMA3 > EMA9 and position==False:
-        
-            stop_loss = price - (graph.loc[row,'ATR']*1.5)
-            profit = price + (graph.loc[row,'ATR']*3)  
+        macd =  graph.loc[row,'MACD']
+       
+        if EMA3 > EMA6 and EMA3 > EMA9 and position==False and macd>0:
+            print('buy') 
+            print(graph.loc[row, 'ATR'])
+            stop_loss = price - (graph.loc[row,'ATR']*1)
+            profit = price + (graph.loc[row,'ATR']*2)  
             shares  = portfolio/price
             portfolio = 0
             graph.loc[row,"BUY"] = price
             position = True 
-        
+            print(stop_loss, profit) 
         if  price>=profit and position==True or price <= stop_loss and position==True:
+            print('sell')
+            if price >= profit:
+                win = win+1
+            else:
+                loose = loose + 1
             graph.loc[row,"SELL"] = price
             portfolio = shares*price
             position = False
@@ -263,7 +270,18 @@ def buy_sell(graph,port):
 
             
             #getPortfolio(starting_portfolio,portfolio)               
-        
+    print(f"""
+            ==========================================
+                            OUTCOME
+            ==========================================
+            # 
+            # Wins: {win}
+            #
+            # Loose: {loose}
+            # 
+            # Portfolio: {portfolio}
+            __________________________________________
+            """)    
     return graph
 
 #getPortfolio(starting_portfolio,portfolio)
@@ -290,8 +308,9 @@ def simulation():
     interval = input("enter symbol: ")
 
     #testing functions
-    pastDATA = get_pastData(symbol,interval)
-    graph = create_dataFrame(pastDATA,symbol)
+    #pastDATA = get_pastData(symbol,interval)
+    #graph = create_dataFrame(pastDATA,symbol)
+    graph = pd.read_excel('hntusdtAugust.xlsx', sheet_name='Sheet')
     ema9 = calc_ema(graph,9)
     ema6 = calc_ema(graph,6)
     ema3 = calc_ema(graph,3)
@@ -663,7 +682,11 @@ def menu(args):
             print('python3 cryptoTrading.py simulate')
         else:
             trade()
-
+    if args[1] == 'simulate':
+        if len(args) !=2:
+            print('Wrong!')
+        else:
+            simulation()
     if args[1]=='sell':
         if len(args)!=2:
             print('python3 cryptoTrading.py sell')
