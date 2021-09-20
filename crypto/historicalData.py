@@ -4,7 +4,7 @@ import pandas as pd
 import openpyxl
 import datetime
 import numpy as np
-response = r.get(f"https://api.binance.com/api/v3/klines?symbol=HNTUSDT&interval=1m&startTime=1629547200000&limit=900").json()
+response = r.get(f"https://api.binance.com/api/v3/klines?symbol=HNTUSDT&interval=5m&startTime=1629547200000&limit=900").json()
 
 my_column= [
  
@@ -60,12 +60,13 @@ for candle in response:
             )
 df['EMA12'] = calc_ema(df['close'],12)
 df['EMA26'] = calc_ema(df['close'],26)
-df['EMA9'] =  calc_ema(df['close'],9)
+
 df['EMA6'] =  calc_ema(df['close'],6)
 df['EMA3'] = calc_ema(df['close'],3)
 for i in range(len(df.index)):
     macd=df.loc[i,'MACD'] = df.loc[i,'EMA12'] - df.loc[i,'EMA26']
-    
+
+df['EMA9'] =  calc_ema(df['MACD'],9)   
 wb = openpyxl.Workbook()
 ws = wb.active
 for r in dataframe_to_rows(df, index=False, header=True):

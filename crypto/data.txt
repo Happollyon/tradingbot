@@ -1,6 +1,0 @@
-BTCUSDT= 3/1.5(2 to 1) return 98.61   -1.38%  seven days -6.57%
-BTCUSDT = 1.5 (1.4 to 1) return  95 euros -5%	seven days -6.57%
-
-XENUSDT = 2.1/1.5 (1.4 to 1) return 121.22 21.22% seven days 29.22%
-XENUSDT = 3/1.5 (2 to 1) return 130.22 31.22% seven days 29.22%
-

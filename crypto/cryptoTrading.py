@@ -235,7 +235,7 @@ def buy_sell(graph,port):
     shares = 0
     win = 0
     loose = 0
-    
+    buy = 0
     
     for row in graph.index[15:]:
         
@@ -246,20 +246,22 @@ def buy_sell(graph,port):
         price = graph.loc[row,'close']
         time =  graph.loc[row, 'open-time']
         macd =  graph.loc[row,'MACD']
-       
-        if EMA3 > EMA6 and EMA3 > EMA9 and position==False and macd>0:
+               
+     #   if EMA3 > EMA6 and EMA3 > EMA9 and position==False and macd>0:
+        if EMA9 > macd and position == False and macd:            
             print('buy') 
             print(graph.loc[row, 'ATR'])
             stop_loss = price - (graph.loc[row,'ATR']*1)
             profit = price + (graph.loc[row,'ATR']*2)  
             shares  = portfolio/price
             portfolio = 0
-            graph.loc[row,"BUY"] = price
+            buy = graph.loc[row,"BUY"] = price
             position = True 
-            print(stop_loss, profit) 
-        if  price>=profit and position==True or price <= stop_loss and position==True:
+            #print(stop_loss, profit) 
+        #if  price>=profit and position==True or price <= stop_loss and position==True:
+        if EMA9<macd and position == True:
             print('sell')
-            if price >= profit:
+            if price >= buy:
                 win = win+1
             else:
                 loose = loose + 1
@@ -310,8 +312,8 @@ def simulation():
     #testing functions
     #pastDATA = get_pastData(symbol,interval)
     #graph = create_dataFrame(pastDATA,symbol)
-    graph = pd.read_excel('hntusdtAugust.xlsx', sheet_name='Sheet')
-    ema9 = calc_ema(graph,9)
+    graph = pd.read_excel('trix/09Sep2021_1151_df - Copy.xlsx', sheet_name='Sheet')
+    ema9 = graph['MACD'].ewm(span=9,adjust = False, ignore_na=False).mean()
     ema6 = calc_ema(graph,6)
     ema3 = calc_ema(graph,3)
 
@@ -325,12 +327,13 @@ def simulation():
     graph = buy_sell(graph,100)
 
     #ploting graph
+    """
     plot1 =plt.figure(1)
     plt.plot(graph['open-time'],graph['close'],label = "Price",zorder=1)
     plt.plot(graph['open-time'],graph['EMA9'], label= "ema9",zorder=1)
     plt.plot(graph['open-time'],graph['EMA6'], label= "ema6", zorder=1)
     plt.plot(graph['open-time'],graph['EMA3'], label= "ema3",zorder=1)
-    
+    """
     plot2= plt.figure(2)
     plt.plot(graph['open-time'],graph['close'],label = "Price",zorder=1)
     plt.scatter(graph['open-time'],graph['BUY'],label="buy")
@@ -390,7 +393,7 @@ def buy(lowest,macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval)
         shares = starting_data['portfolio']/price
         shares = round(shares,starting_data['step_size'])
         response =place_order(symbol,'BUY','MARKET',shares) #calls funct that places order   
-        
+       
         if  response['status'] != 'filed': #if order is placed properly 
             
             #updates starting data
