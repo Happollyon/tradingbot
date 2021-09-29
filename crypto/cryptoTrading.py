@@ -33,7 +33,7 @@ from multiprocessing import freeze_support,Manager
 from binance.error import ClientError
 import openpyxl
 from openpyxl.utils.dataframe import dataframe_to_rows
-
+from playsound import playsound
 """
     GETTING Arguments 
 """
@@ -75,7 +75,8 @@ my_columns = [
             "BUY",
             "SELL",
             "ATR",
-            "portfolio"
+            "portfolio",
+            "signal"
         ]
 
 def place_order(symbol,side,typee,quantity):
@@ -162,6 +163,7 @@ def create_dataFrame(data_set):
                 NaN,
                NaN,
                NaN,
+               NaN,
                NaN
             
                 ],
@@ -192,6 +194,13 @@ def calcWMA(n):
 
     graph['WMA'] = np.round(wma10, decimals = 3)
 
+def calc_macd(ema12,ema26):
+    macd = []
+    for i in range(len(ema12)):
+        hold = ema12[i] - ema26[i]
+        macd.append(hold)
+    return macd
+
 
 # calculating EMA
 """
@@ -205,6 +214,10 @@ def calc_ema(dataset,n):
 #ema9 = graph['close'].ewm(span=9).mean()
 #ema6 = graph['close'].ewm(span=6).mean()
 #ema3 = graph['close'].ewm(span=3).mean()
+
+def calc_change(new,old):
+    change = ((new-old)/old)*100
+    return change
 
 def calculate_atr(DATA,n):
     high_low = DATA['high'] - DATA['low']
@@ -353,24 +366,28 @@ def simulation():
 #every time websocet recieves a msg this function is called
 # and List is updated so graph can update 
 def on_message(List,sale,starting_data,symbol,interval,ws,message):
-    
+     
     message2 = json.loads(message) 
-    sell_action,take_profit,stop_loss = sell(float(message2['k']['c']),starting_data,symbol,interval) #calls sell func if conditons are met
-        
-    if sell_action: #if sell returns true sale data list updated
-        data = message2['k']
-        NaN = np.nan
-        time = datetime.datetime.utcfromtimestamp(message2['E']/1000)
-        sale.append([time,float(data['c']),float(starting_data['portfolio']),take_profit,stop_loss])
-        if interval == "1m":
-            starting_data['skip']=2
-            print(starting_data['skip'])
-                
+    #if x and position true
+    if message2['k']['x'] == True and starting_data['position'] == True:
+        print('postion true and Candle closed')
+        #sell_action,take_profit,stop_loss = sell(float(message2['k']['c']),starting_data,symbol,interval) #calls sell func if conditons are met
+        sell_action = False
+        if sell_action: #if sell returns true sale data list updated
+            print('sell action iquals Truee')
+            data = message2['k']
+            NaN = np.nan
+            time = datetime.datetime.utcfromtimestamp(message2['E']/1000)
+            sale.append([time,float(data['c']),float(starting_data['portfolio']),take_profit,stop_loss])
+            if interval == "1m":
+                starting_data['skip']=2
+                print(starting_data['skip'])
+                    
     if message2['k']['x']==True: #every time a candel closes main data list is updated
         data = message2['k']
         NaN = np.nan
         time = datetime.datetime.utcfromtimestamp(message2['E']/1000)    
-        List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
+        List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
         print('new candle')        
          
 def on_close():
@@ -385,9 +402,10 @@ def getCandels(symbol,interval,List,sale,starting_data):
     ws.run_forever()
 
 
-def buy(lowest,macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
-    print(f"macd: {macd}")
-    if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False and starting_data['skip']==0 and macd>0:
+def buy(signal,lowest,macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
+    
+    if signal>macd and starting_data['position'] == False:
+    #if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False and starting_data['skip']==0 and macd>0:
     #if starting_data['position']==False: # checks if there is active position
                 
         shares = starting_data['portfolio']/price
@@ -400,9 +418,8 @@ def buy(lowest,macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval)
             actual_price=  sum(float(fill['price'])for fill in response['fills'])/len(response['fills'])
             payed_price = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
             stop_loss=starting_data['stop_loss'] = lowest - ( atr * 1 )
-            profit=starting_data['profit'] = actual_price + (atr * 2)
-            #starting_data['stop_loss'] = price - 1
-            #starting_data['profit'] = price + 1
+            profit=starting_data['profit'] = actual_price # changed to hold price value NOT profit
+            starting_data['starting_portfolio'] = payed_price
             qty = starting_data['shares'] = float(response['executedQty'])
             starting_data['portfolio'] = 0
             starting_data['position'] = True
@@ -421,7 +438,7 @@ def buy(lowest,macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval)
             | stop_loss:    {stop_loss}  
             ================================================================================
             """)
-            print('\a')
+            playsound('cash.mp3')
             return True # returns that it was placed
                  
         else:
@@ -431,7 +448,7 @@ def buy(lowest,macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval)
 
     return False    #if everything goes wrong, returs that order wasnt placed  
 
-def sell(price, starting_data,symbol,interval):
+def sell(signal,macd,price, starting_data,symbol,interval):
     
     profit = starting_data['profit']
     position = starting_data['position'] 
@@ -441,36 +458,56 @@ def sell(price, starting_data,symbol,interval):
     is_loss =0
      
     # checks that there is a position and conditions for sale a met
-    if price >= profit and position==True or price <= stop_loss  and position == True:
+    if signal < macd and position==True:
+    #if price >= profit and position==True or price <= stop_loss  and position == True:
         
-        if price>= profit:
-            is_profit=1
-            is_loss=0
-        else:
-            is_profit=0
-            is_loss=1
         response = place_order(symbol,'SELL','MARKET',shares) # calls order func
         
         if response: #if order is placed  starting data list is updated
+            
+            if price>= profit:
+                is_profit=1
+                is_loss=0
+                starting_data['wins']+=1 
+            else:
+                is_profit=0
+                is_loss=1
+                starting_data['losses']+=1
+            
+            wins = starting_data['wins']
+            losses = starting_data['losses']
+            winsPercentage = (wins*100)/(wins+losses)
+            lossesPercentage = (losses*100)/(wins+losses)
             qty = float(response['executedQty'])
             price = sum(float(fill['price']) for fill in response['fills'])/len(response['fills'])
-            prof = qty*price
-            portfolio = starting_data['shares']*price
+            portfolio = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
             starting_data['portfolio']=portfolio
             starting_data['position'] = False # sets postion to no longer active
-            print('\a')
+
+            res =client.account()
+            USDT = 0
+
+            for asset in res['balances']:
+                if asset['asset'] =='USDT':
+                    USDT=asset['free']
+            
+            portfolio_change = calc_change(portfolio,starting_data['starting_portfolio'])
+            
             print(f"""
             --------------------------------------------------------------------
             ##########################**SELL**##################################
             --------------------------------------------------------------------
-            | Price:        {price}
+            | Price:        ${price}
             | Qty:          {qty}
-            | Price * Qty:  {prof}
-            | portfolio**:  {portfolio}
+            | portfolio**:  ${portfolio}
             | Is profit? :  {is_profit}
-            | Portifolio %  change: to be updated
+            | wins = {wins} {winsPercentage}%
+            | losses = {losses} {lossesPercentage}%
+            | USDT = ${USDT}
+            | Portifolio : {portfolio_change}%
             ====================================================================
-                    """)          
+            """)
+            playsound('cash.mp3')
             return  True, is_profit, is_loss; # returns that order was completed 
     
     return False ,is_profit,is_loss;     # returns that order failed   
@@ -488,7 +525,7 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval,df_csv_name)
     if size> 0: # if main data size > 0
 
         if  df.loc[df_size-1,'open-time'] != data[size-1][0]: #checks if there is new row in data list/ checks for new candel
-            
+ #           print(len(data[size-1]))            
             df.loc[df_size]= data[size-1] # adds new row to main dataframe
             # Calculates new EMA
             ema26 = calc_ema(df,26)
@@ -496,8 +533,8 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval,df_csv_name)
             ema9 = calc_ema(df,9)
             ema6 = calc_ema(df,6)
             ema3 = calc_ema(df,3)
-            
-            
+            take_profit=0            
+            stop_loss=0
             atr = calculate_atr(df,14) #Calculates new ATR
             
             df['ATR'] = atr
@@ -507,17 +544,33 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval,df_csv_name)
             df['EMA12'] = ema12
             df['EMA26'] = ema26
             df.loc[df_size, 'MACD']= df.loc[df_size, 'EMA12']-df.loc[df_size, 'EMA26']
-            print('macd ',df.loc[df_size,'MACD'],'ema12',df.loc[df_size,'EMA12'],'ema26',df.loc[df_size,'EMA26'])
+            df['signal'] = df['MACD'].ewm(span=9,adjust = False, ignore_na=False).mean()
+#            print('macd ',df.loc[df_size,'MACD'], 'signal: ',df['signal'].iloc[-1])
+            
+
             if not starting_data['position'] and  pd.isna(df.loc[df_size,'SELL']): # if there is no active positon
                 # runs buy func returns true or false
                 if interval == '1m' and starting_data['skip']>0:
                     starting_data['skip']=starting_data['skip'] - 1
                     
-                buy_action = buy(df.loc[df_size, 'low'],df.loc[df_size, 'MACD'],df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'],symbol,interval)
+                buy_action = buy(df['signal'].iloc[-1],df.loc[df_size, 'low'],df.loc[df_size, 'MACD'],df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'],symbol,interval)
             
                 if buy_action:  
                     df.loc[df_size,'BUY'] = df.loc[df_size,'close']#adds buy price to data frame
             
+            if starting_data['position']: # if there is an open position
+
+                sell_action,take_profit,stop_loss = sell(df['signal'].iloc[-1],df['MACD'].iloc[-1],df.loc[df_size,'close'],starting_data,symbol,interval) #calls sell func if conditons are met
+                if sell_action: #if sell returns true sale data list updated
+                    print('sell action iquals Truee')
+                    
+                    NaN = np.nan
+                    print('sale append',df['open-time'].iloc[-1],df.loc[df_size,'close'],float(starting_data['portfolio']),take_profit,stop_loss)             
+                    sale.append([df['open-time'].iloc[-1],df.loc[df_size,'close'],float(starting_data['portfolio']),take_profit,stop_loss])
+                    if interval == "1m":
+                        starting_data['skip']=2
+                        print(starting_data['skip'])                
+
             wb = openpyxl.load_workbook(df_csv_name)
             ws = wb.active
             startRow = ws.max_row +1
@@ -563,15 +616,23 @@ def ploting(List,sale,starting_data,symbol, interval):
     data_set= get_pastData(symbol,interval) #gest past data so it can be ploted
     df = create_dataFrame(data_set) # creates data frame with past data
     sale_df = pd.DataFrame(columns = ["time","price",'portfolio','take-profit','stop-loss'])#creates data frame to host sales data
+    ema26 = calc_ema(df,26)
+    ema12 = calc_ema(df,12)
     ema9 = calc_ema(df,9)
     ema6 = calc_ema(df,6)
     ema3 = calc_ema(df,3)
+    macd = calc_macd(ema12,ema26)
     
+    df['EMA12'] = np.round(ema12, decimals = 3 )
+    df['EMA26'] = np.round(ema26, decimals = 3)
     df['EMA9'] = np.round(ema9, decimals = 3)
     df['EMA6'] = np.round(ema6, decimals = 3)
     df['EMA3'] = np.round(ema3, decimals = 3)    
+    df['MACD'] = macd
     atr = calculate_atr(df,14)
     df['ATR'] = atr
+    df['signal'] = df['MACD'].ewm(span=9,adjust = False, ignore_na=False).mean()
+    
 
     now = datetime.datetime.now()
     current_time = now.strftime("%d%b%Y_%H%M")
@@ -648,6 +709,16 @@ def trade():
     starting_data['portfolio']= float(portfolio)
     starting_data['starting_portfolio'] = float(portfolio)
     starting_data['shares'] = 0
+    starting_data['wins']=0
+    starting_data['losses'] = 0
+    starting_data['USDT'] = 0
+    
+    res =client.account()
+    for asset in res['balances']:
+        if asset['asset'] =='USDT':
+            starting_data['USDT'] = asset['free']
+            print(asset['free'])
+    
     freeze_support() # seems to be mandatory
     p1=mp.Process(target=run_sockets, args=(List,sale,starting_data,symbol,interval)) #creates process 1
     p2=mp.Process(target=ploting, args=(List,sale,starting_data,symbol,interval))   # creates process 2
@@ -678,8 +749,13 @@ def menu(args):
     if args[1]=='account':
         if len(args) !=2:
             print('python3 cryptoTrading.py account')
+            
         else:
-            print(client.account())
+            res =client.account()
+            for asset in res['balances']:
+                if asset['asset'] =='USDT':
+                    print(asset['free'])
+
     if args[1]=='trade':
         if len(args) !=2:
             print('python3 cryptoTrading.py simulate')
