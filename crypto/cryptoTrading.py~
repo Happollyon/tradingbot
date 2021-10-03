@@ -290,7 +290,7 @@ def buy_sell(graph,port):
            
             print('ema200:',EMA200,'price',price) 
             stop_loss = low - (graph.loc[row,'ATR']*1)
-            profit = price + (graph.loc[row,'ATR']*2)  
+            profit = price + (graph.loc[row,'ATR']*1.5)  
             #stop_loss = low -(price*0.01)
             #profit = price + (price*0.016)
             shares  = portfolio/price

@@ -139,8 +139,8 @@ def change():
       # Selecting the top 20    
     for i in range(99,00,-1):
         new_symbol = newlist[i]['symbol'].upper()
-        oneH=round(newlist[i]['price_change_percentage_1h_in_currency'],3)
-        two4H =round(newlist[i]['price_change_percentage_24h'],3)
+        oneH=newlist[i]['price_change_percentage_1h_in_currency']
+        two4H =newlist[i]['price_change_percentage_24h']
         price = newlist[i]['current_price']
         new_symbol = new_symbol+'USDT'
         response  = r.get(f'https://api.binance.com/api/v3/exchangeInfo?symbol={new_symbol}')
@@ -198,13 +198,13 @@ def change():
             signalH ='False'    
             signalM = 'False'
             
-            if df['signalH'].iloc[-1]<df['macdH'].iloc[-1]:
+            if df['signalH'].iloc[-1]>df['macdH'].iloc[-1]:
                 signalH = 'True'
             else:
                 signal = 'False'
            
 
-            if df['signalM'].iloc[-1] < df['macdM'].iloc[-1]:
+            if df['signalM'].iloc[-1] > df['macdM'].iloc[-1]:
                 signalM= 'True'
             else:
                 signal = 'False '
