@@ -34,6 +34,9 @@ from binance.error import ClientError
 import openpyxl
 from openpyxl.utils.dataframe import dataframe_to_rows
 from playsound import playsound
+import ta
+import talib  as pta
+
 """
     GETTING Arguments 
 """
@@ -77,7 +80,14 @@ my_columns = [
             "SELL",
             "ATR",
             "portfolio",
-            "signal"
+            "signal",
+            "support",
+            "resistance",
+            "benchmark",
+            'rsi',
+            'sarUP',
+            'sarDOWN',
+            'stoch'
         ]
 
 def place_order(symbol,side,typee,quantity):
@@ -112,7 +122,6 @@ def change24H():
                 data["symbol"],
                 data["price_change_percentage_1h_in_currency"],
                 data["total_volume"]
-
                 ],
                     index=my_columns
                 ),
@@ -150,7 +159,7 @@ def extended_pastData(symbol,interval,candles):
 # gets data from binance
 def get_pastData(symbol,interval):
     symbol =symbol.upper()
-    data = r.get(f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=1000").json()
+    data = r.get(f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=350").json()
     return data 
 
 
@@ -184,7 +193,9 @@ def create_dataFrame(data_set):
                NaN,
                NaN,
                NaN,
-               NaN
+               NaN,
+               NaN,
+               NaN,NaN,NaN,NaN,NaN,NaN
             
                 ],
                     index=my_columns
@@ -221,6 +232,24 @@ def calc_macd(ema12,ema26):
         macd.append(hold)
     return macd
 
+def is_support(df,i):  
+  cond1 = df['close'][i] < df['close'][i-1]   
+  cond2 = df['close'][i] < df['close'][i+1]   
+  cond3 = df['close'][i+1] < df['close'][i+2]   
+  cond4 = df['close'][i-1] < df['close'][i-2]  
+  return (cond1 and cond2 and cond3 and cond4)
+
+def is_resistance(df,i):  
+  cond1 = df['close'][i] > df['close'][i-1]   
+  cond2 = df['close'][i] > df['close'][i+1]   
+  cond3 = df['close'][i+1] > df['close'][i+2]   
+  cond4 = df['close'][i-1] > df['close'][i-2]  
+  return (cond1 and cond2 and cond3 and cond4)
+
+# to make sure the new level area does not exist already
+def is_far_from_level(value, levels, df):    
+  ave =  np.mean(df['High'] - df['Low'])    
+  return np.sum([abs(value-level)<ave for _,level in levels])==0
 
 # calculating EMA
 """
@@ -240,6 +269,7 @@ def calc_change(new,old):
     return change
 
 def calculate_atr(DATA,n):
+
     high_low = DATA['high'] - DATA['low']
     high_cp= np.abs(DATA['high'] - DATA['close'].shift())
     low_cp = np.abs(DATA['low'] - DATA['close'].shift())
@@ -271,6 +301,9 @@ def buy_sell(graph,port):
     buy = 0
     cycle = True
     fees = 0
+    TSL =0
+    count = 0
+    looking = 0
     for row in graph.index[28:]:
         
         EMA3 = graph.loc[row,'EMA3']
@@ -282,40 +315,63 @@ def buy_sell(graph,port):
         macd =  graph.loc[row,'MACD']
         high = graph.loc[row,'high']
         low = graph.loc[row,'low'] 
+        rsi = graph.loc[row,'rsi']
+        sarUP = graph.loc[row,'sarUP']
+        nan = np.nan
+        stoch = graph.loc[row,'stoch']
+        atr = graph.loc[row,'ATR'] 
+        
         if signal > macd:
             cycle = True
-
-     #   if EMA3 > EMA6 and EMA3 > EMA9 and position==False and macd>0:.
-        if signal < macd and position == False  and macd < 0 and cycle==True and price >EMA200:
-           
-            print('ema200:',EMA200,'price',price) 
-            stop_loss = low - (graph.loc[row,'ATR']*1)
-            profit = price + (graph.loc[row,'ATR']*2)  
+         
+        if position == True:
+            count +=1
+        """    if high  > graph.loc[row -1,'benchmark']:
+                graph.loc[row,'benchmark'] = price
+            else:
+                graph.loc[row,'benchmark'] = graph.loc[row-1,'benchmark']
+            #TSL = graph.loc[row,'benchmark'] - (graph.loc[row,'ATR']*2)
+            TSL = graph.loc[row,'benchmark'] - (graph.loc[row,'benchmark']*0.01)
+            print(graph.loc[row,'benchmark'])
+        """
+        if position == False:
+            looking +=1
+        if  position == False and rsi<0.10 and sarUP <  price  and cycle == True :           
+            stop_loss = sarUP
+            print(graph.loc[row,'open-time'],'sarUP',sarUP,'price',price, 'rsi',rsi,'hig',high,'low',low,'looking',looking)
+            looking = 0
+            profit = price + (price * 0.010) 
             #stop_loss = low -(price*0.01)
             #profit = price + (price*0.016)
             shares  = portfolio/price
             fees += portfolio * (0.075/100)
             portfolio = 0
             buy = graph.loc[row,"BUY"] = price
-            position = True 
-            
-            #print(stop_loss, profit) 
-        #if  price>=profit and position==True or price <= stop_loss and position==True:
-        if high >= profit and position ==True or price>=profit and position == True or price<=stop_loss and position ==True:
-                
-            if price >= profit or price <= stop_loss:
+            position = True
+            #print('buy bench',graph.loc[row,'benchmark'])
+            TSL = sarUP
+        
+            graph.loc[row,'benchmark'] = price
+            TSLL = price - (price*0.01)        
+        
+        if  high >= profit and position == True:
+            print('buy',buy,'sell',price,'profit',profit,'stop_loss',stop_loss,'minutes: ',count)    
+            count = 0
+            if price<=stop_loss or price>=profit:
                 cycle = False
             else:
                 cycle = True
             
-            if price >= buy:
+            if price >= buy :
                 win = win+1
                 print('win')
             else:
                 print('loose')
                 loose = loose + 1
+            if price> price:
+                price = TSL
             graph.loc[row,"SELL"] = price
-            portfolio = shares*price
+            portfolio = shares*profit
             fees += portfolio * (0.075/100)
             position = False
             graph.loc[row,"portfolio"] = portfolio
@@ -395,7 +451,7 @@ def simulation():
 
     #testing functions
     #pastDATA = get_pastData(symbol,interval)
-    pastDATA = extended_pastData(symbol,interval,15000)
+    pastDATA = extended_pastData(symbol,interval,5000)
     graph = create_dataFrame(pastDATA)
     #graph = pd.read_excel('trix/09Sep2021_1151_df - Copy.xlsx', sheet_name='Sheet')
     ema26 = calc_ema(graph,26)
@@ -416,6 +472,22 @@ def simulation():
     graph['MACD'] = macd
     signal = graph['MACD'].ewm(span=9,adjust = False, ignore_na=False).mean()
     graph['signal'] = signal
+    rsi = ta.momentum.StochRSIIndicator(graph['close'])
+    graph['rsi'] = rsi.stochrsi_k()
+    graph['sarUP'] = pta.SAR(graph['high'],graph['low'], acceleration= 0.02,maximum=0.2)
+    graph['stoch'] = ta.momentum.StochasticOscillator(graph['high'],graph['low'],graph['close']).stoch()
+    
+    for row in range(2,len(graph.index)-2):
+        if is_support(graph,row):
+            graph.loc[row,'support'] = True
+        else:
+            graph.loc[row,'support'] = False
+
+        if is_resistance(graph,row):
+            graph.loc[row,'resistance'] = True
+        else:
+            graph.loc[row,'resistance'] = False
+    
     graph = buy_sell(graph,100)
     
     #ploting graph
@@ -428,9 +500,16 @@ def simulation():
     """
     plot2= plt.figure(2)
     plt.plot(graph['open-time'],graph['close'],label = "Price",zorder=1)
-    plt.scatter(graph['open-time'],graph['BUY'],label="buy")
-    plt.scatter(graph['open-time'],graph['SELL'],label="sell")        
-
+    
+    plt.scatter(graph['open-time'],graph['BUY'],label="buy",color='green')
+    plt.scatter(graph['open-time'],graph['SELL'],label="sell",color = 'red')  
+    for i in graph.index:
+        if graph.loc[i,'resistance']:
+            pass
+            #plt.scatter(graph.loc[i,'open-time'],graph.loc[i,'close'],marker ='v', color='r')
+        if graph.loc[i,'support']:
+            pass
+            #plt.scatter(graph.loc[i,'open-time'],graph.loc[i,'close'],marker='^',color='green')
     plot3 = plt.figure(3)
     plt.plot(graph["open-time"], graph['portfolio'], marker = 'o',label = "Portfolio")
 
@@ -449,7 +528,15 @@ def on_message(List,sale,starting_data,symbol,interval,ws,message):
     message2 = json.loads(message) 
     #if x and position true
     if starting_data['position'] == True:
-        print('postion true and Candle closed')
+        
+        if starting_data['benchmark']>float(message2['k']['c']):
+            print(starting_data['benchmark'],float(message2['k']['c']))
+        else:
+            benchmark = starting_data['benchmark'] = float(message2['k']['c'])
+            TSL=starting_data['TSL'] = benchmark - starting_data['ATR']
+            print('bencmark',benchmark,'TSL',TSL,'price',float(message2['k']['c']))
+        
+
         sell_action,take_profit,stop_loss = sell(0,0,float(message2['k']['c']),starting_data,symbol,interval) #calls sell func if conditons are met
         
         if sell_action: #if sell returns true sale data list updated
@@ -464,7 +551,7 @@ def on_message(List,sale,starting_data,symbol,interval,ws,message):
         data = message2['k']
         NaN = np.nan
         time = datetime.datetime.utcfromtimestamp(message2['E']/1000)    
-        List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
+        List.append([time,float(data['o']),float(data['h']),float(data['l']),float(data['c']),NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN])
         print('new candle')        
          
 def on_close():
@@ -479,30 +566,37 @@ def getCandels(symbol,interval,List,sale,starting_data):
     ws.run_forever()
 
 
-def buy(ema100,signal,lowest,macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
+def buy(rsi,ema100,signal,lowest,macd,ema3,ema6,ema9,price,time,starting_data,atr,symbol,interval):
+    
     if signal > macd:
-        print('buy cycle=',starting_data['CYCLE'])
         starting_data['CYCLE'] = True
-    if signal<macd and starting_data['position'] == False and starting_data['CYCLE']==True:
-    #if ema3 > ema6 and ema3 >ema9 and starting_data['position']==False and starting_data['skip']==0 and macd>0:
-    #if starting_data['position']==False: # checks if there is active position
-                
+    print('buy','signal',signal,'macd',macd,'rsi',rsi)    
+    if signal<macd and starting_data['position'] == False and rsi>0.20 and rsi<0.80 and starting_data['CYCLE']==True:
+           
         shares = starting_data['portfolio']/price
         shares = round(shares,starting_data['step_size'])
-        response =place_order(symbol,'BUY','MARKET',shares) #calls funct that places order   
-       
-        if  response['status'] != 'filed': #if order is placed properly 
-            
+        #response =place_order(symbol,'BUY','MARKET',shares) #calls funct that places order   
+        response= True
+
+        #if  response['status'] == 'filed': #if order is placed properly     
+        if response: 
             #updates starting data
-            actual_price=  sum(float(fill['price'])for fill in response['fills'])/len(response['fills'])
-            payed_price = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
-            stop_loss=starting_data['stop_loss'] = actual_price # changed to hold price value NOT STOP LOSS
-            profit=starting_data['profit'] = actual_price + (atr*1.5)
-            starting_data['starting_portfolio'] = payed_price
-            qty = starting_data['shares'] = float(response['executedQty'])
+            #actual_price=  sum(float(fill['price'])for fill in response['fills'])/len(response['fills'])
+            #payed_price = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
+            starting_data['benchmark'] = price #test
+            payed_price = actual_price = price #test
+            stop_loss=starting_data['stop_loss'] = price-atr # changed to hold price value NOT STOP LOSS
+            starting_data['TSL'] = price - atr
+            profit=starting_data['profit'] = actual_price + (actual_price * 0.0020)#test (atr*1.5)
+            starting_data['starting_portfolio'] = starting_data['portfolio']
+            #qty = starting_data['shares'] = float(response['executedQty'])
+            qty = starting_data['shares'] = shares 
             starting_data['portfolio'] = 0
             starting_data['position'] = True
-            price_share= price*starting_data['shares']
+            starting_data['ATR'] = atr
+            starting_data['buy'] = price #test
+            
+
             print(f"""
             --------------------------------------------------------------------------------
                                             BUY
@@ -535,18 +629,20 @@ def sell(signal,macd,price, starting_data,symbol,interval):
     shares = starting_data['shares']
     is_profit=0
     is_loss =0
-    if price > profit and position == True:
-        print('sell cycle>',starting_data['CYCLE'])
+    
+    if price <= starting_data['TSL'] and position == True:
         starting_data['CYCLE']=False
     # checks that there is a position and conditions for sale a met
-    if signal > macd and position==True or price>= profit and position==True:
+    #if signal > macd and position==True or price>= profit and position==True:
     #if price >= profit and position==True or price <= stop_loss  and position == True:
-        
-        response = place_order(symbol,'SELL','MARKET',shares) # calls order func
-        
+    
+    #if price<=starting_data['TSL']: #test
+    if price>=profit:
+    #response = place_order(symbol,'SELL','MARKET',shares) # calls order func
+        response = True # test delete
         if response: #if order is placed  starting data list is updated
             
-            if price>= stop_loss:
+            if price>= starting_data['buy']: #test should be sotp_loss
                 is_profit=1
                 is_loss=0
                 starting_data['wins']+=1 
@@ -559,9 +655,11 @@ def sell(signal,macd,price, starting_data,symbol,interval):
             losses = starting_data['losses']
             winsPercentage = (wins*100)/(wins+losses)
             lossesPercentage = (losses*100)/(wins+losses)
-            qty = float(response['executedQty'])
-            price = sum(float(fill['price']) for fill in response['fills'])/len(response['fills'])
-            portfolio = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
+            #qty = float(response['executedQty'])
+            qty = starting_data['shares'] #test delete
+            #price = sum(float(fill['price']) for fill in response['fills'])/len(response['fills'])
+            #portfolio = sum(float(fill['price'])*float(fill['qty']) for fill in response['fills'])
+            portfolio = price * qty # test delete
             starting_data['portfolio']=portfolio
             starting_data['position'] = False # sets postion to no longer active
 
@@ -571,7 +669,7 @@ def sell(signal,macd,price, starting_data,symbol,interval):
             for asset in res['balances']:
                 if asset['asset'] =='USDT':
                     USDT=asset['free']
-            
+            print(portfolio,starting_data['starting_portfolio'])
             portfolio_change = calc_change(portfolio,starting_data['starting_portfolio'])
             
             print(f"""
@@ -606,15 +704,16 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval,df_csv_name)
     if size> 0: # if main data size > 0
 
         if  df.loc[df_size-1,'open-time'] != data[size-1][0]: #checks if there is new row in data list/ checks for new candel
- #           print(len(data[size-1]))            
+ #          print(len(data[size-1]))            
+            
             df.loc[df_size]= data[size-1] # adds new row to main dataframe
             # Calculates new EMA
-            ema100 = calc_ema(df,100)
+            ema200 = calc_ema(df,200)
             ema26 = calc_ema(df,26)
             ema12 = calc_ema(df,12)
             ema9 = calc_ema(df,9)
             ema6 = calc_ema(df,6)
-            ema3 = calc_ema(df,3)
+            #ema3 = calc_ema(df,3)
             take_profit=0            
             stop_loss=0
             atr = calculate_atr(df,14) #Calculates new ATR
@@ -622,21 +721,21 @@ def animate(self,List,sale,df,sale_df,starting_data,symbol,interval,df_csv_name)
             df['ATR'] = atr
             df['EMA9'] = ema9
             df['EMA6'] = ema6
-            df['EMA3'] = ema3
+            df['EMA3'] = df['close'].pct_change()
             df['EMA12'] = ema12
             df['EMA26'] = ema26
-            df['EMA100'] = ema100
+            df['EMA200'] = ema200
             df.loc[df_size, 'MACD']= df.loc[df_size, 'EMA12']-df.loc[df_size, 'EMA26']
             df['signal'] = df['MACD'].ewm(span=9,adjust = False, ignore_na=False).mean()
-#            print('macd ',df.loc[df_size,'MACD'], 'signal: ',df['signal'].iloc[-1])
-            
-
+            rsi = ta.momentum.StochRSIIndicator(df['close'])
+            df['rsi'] = rsi.stochrsi_k()
+            print(df['EMA3'].iloc[-1])
             if not starting_data['position'] and  pd.isna(df.loc[df_size,'SELL']): # if there is no active positon
                 # runs buy func returns true or false
                 if interval == '1m' and starting_data['skip']>0:
                     starting_data['skip']=starting_data['skip'] - 1
                     
-                buy_action = buy(df['EMA100'].iloc[-1],df['signal'].iloc[-1],df.loc[df_size, 'low'],df.loc[df_size, 'MACD'],df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'],symbol,interval)
+                buy_action = buy(df['rsi'].iloc[-1],df['EMA200'].iloc[-1],df['signal'].iloc[-1],df.loc[df_size, 'low'],df.loc[df_size, 'MACD'],df.loc[df_size,'EMA3'],df.loc[df_size,'EMA6'],df.loc[df_size,'EMA9'],df.loc[df_size,'close'],df.loc[df_size,'open-time'],starting_data,df.loc[df_size,'ATR'],symbol,interval)
             
                 if buy_action:  
                     df.loc[df_size,'BUY'] = df.loc[df_size,'close']#adds buy price to data frame
@@ -693,25 +792,26 @@ def ploting(List,sale,starting_data,symbol, interval):
     data_set= get_pastData(symbol,interval) #gest past data so it can be ploted
     df = create_dataFrame(data_set) # creates data frame with past data
     sale_df = pd.DataFrame(columns = ["time","price",'portfolio','take-profit','stop-loss'])#creates data frame to host sales data
-    ema100 = calc_ema(df,100)
+    ema200 = calc_ema(df,200)
     ema26 = calc_ema(df,26)
     ema12 = calc_ema(df,12)
     ema9 = calc_ema(df,9)
     ema6 = calc_ema(df,6)
-    ema3 = calc_ema(df,3)
+    #ema3 = calc_ema(df,3)
     macd = calc_macd(ema12,ema26)
     
     df['EMA12'] = np.round(ema12, decimals = 3 )
     df['EMA26'] = np.round(ema26, decimals = 3)
-    df['EMA100'] = ema100
+    df['EMA200'] = ema200
     df['EMA9'] = np.round(ema9, decimals = 3)
     df['EMA6'] = np.round(ema6, decimals = 3)
-    df['EMA3'] = np.round(ema3, decimals = 3)    
+    df['EMA3'] = df['close'].pct_change()  
     df['MACD'] = macd
     atr = calculate_atr(df,14)
     df['ATR'] = atr
     df['signal'] = df['MACD'].ewm(span=9,adjust = False, ignore_na=False).mean()
-    
+    rsi = ta.momentum.StochRSIIndicator(df['close'])
+    df['rsi'] = rsi.stochrsi_k()
 
     now = datetime.datetime.now()
     current_time = now.strftime("%d%b%Y_%H%M")
@@ -792,6 +892,10 @@ def trade():
     starting_data['losses'] = 0
     starting_data['USDT'] = 0
     starting_data['CYCLE'] = True # controls if buying is allowed
+    starting_data['benchmark'] = 0
+    starting_data['ATR'] = 0
+    starting_data['buy'] = 0
+
     res =client.account()
     for asset in res['balances']:
         if asset['asset'] =='USDT':

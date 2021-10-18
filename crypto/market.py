@@ -15,6 +15,7 @@ counter=0
 hour_counter = 0
 symbols_names_copy=[]
 not_working= ['DAIUSDT','USDPUSDT']
+
 def calc_change(new,old):
     change = ((new-old)/old)*100
     return change
